@@ -1,12 +1,14 @@
-//interactive narrative of "time is finite"
+//interactive narrative of "time is finite" | final project for creative coding which is supposed to communicate a sense of urgency for people to make good use of their time & cherish memories :)
 
 //CONSTANTS
 const CANVAS_W = 600;         
 const CANVAS_H = 900;
-const COLUMNS  = 52; // 52 weeks in a year                                                                                                                       
-const ROWS = 80;     // 80 years in a life                                                                                                                       
-const CELL= 9;       // how far apart each box is spaced                                                                                                         
-const BOX = 7;       // how big each box is                                                                                                                      
+const COLUMNS  = 52; // 52 weeks for a year                                                                                                                       
+const ROWS = 80; //80 years in a life                                                                                                                       
+
+//box size
+const CELL= 9;                                                                                                       
+const BOX = 7;                                                                                                                  
 const GRID_X = Math.floor((CANVAS_W - COLUMNS * CELL) / 2); // center the grid horizontally                                                                      
 const GRID_Y = 90; // how far down the grid starts                                                                                                               
 
