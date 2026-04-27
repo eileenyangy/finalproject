@@ -13,9 +13,11 @@ const GRID_X = Math.floor((CANVAS_W - COLUMNS * CELL) / 2); // center the grid h
 const GRID_Y = 90; // how far down the grid starts                                                                                                               
 
 //GLOBAL VARIABLES                                                                                                                                               
-let canelaFont;                                           
+let canelaFont;
 let scene; // which screen we're on right now
+let birthDate; // stored so hover tooltips can compute dates per box
 let weeksLived, yearsLived, weeksRemaining; // the numbers we calculate from the birthday
+let caret = ''; // blinking cursor character for the input field
                                                                                                                                                                  
 function preload() { //load font                                                                                                          
   canelaFont = loadFont('data/CanelaText-Light-Trial.otf');                                                                                                      
@@ -26,9 +28,10 @@ function setup() { // runs once at the beginning
   goTo(inputScene); // start on the birthday input screen                                                                                                        
 }
                                                                                                                                                                  
-function draw() { //                                                                                       
-  background(10); // clear the screen to dark
-  scene.draw(); // draw whatever screen we're on                                                                                                                 
+function draw() {
+  background(10);
+  caret = frameCount % 40 < 20 ? '|' : ' '; // blink every ~0.3s
+  scene.draw();
 }                                                                                                                                                                
                                                                                                                                                                  
 function keyPressed()   { scene.handleKey?.(); }                                                                
@@ -60,11 +63,12 @@ function drawGrid(count) { // draw `count` boxes, one box = one week of life
   }
 }                                                                                                                                                                
                                                           
-function computeWeeks(birthDate) { // figure out how many weeks this person has lived                                                                            
-  let msPerWeek  = 7 * 24 * 60 * 60 * 1000; // 1 week in milliseconds
-  weeksLived = floor((Date.now() - birthDate) / msPerWeek); // weeks since bday                                                                          
-  yearsLived = floor(weeksLived / COLUMNS); //ab how many full years                                                                                   
-  weeksRemaining = COLUMNS * ROWS - weeksLived; //weeks left until age 80                                                                                       
+function computeWeeks(bd) {
+  birthDate = bd; // store globally so tooltip can compute per-box dates
+  let msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  weeksLived     = floor((Date.now() - bd) / msPerWeek);
+  yearsLived     = floor(weeksLived / COLUMNS);
+  weeksRemaining = COLUMNS * ROWS - weeksLived;
 }                                                                                                                                                                
                                                                                                                                                                  
 function parseDate(str) { // turn "mm/dd/yyyy" into a real date, or null if it's bad                                                                             
@@ -83,6 +87,50 @@ function formatDigits(digits) { // add slashes as the user types, like "12/25/19
   return digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4, 8);                                                                               
 }                                                                                                                                                                
                                                                                                                                                                  
+// HOVER TOOLTIP
+function getHoveredBox() {
+  for (let i = 0; i < COLUMNS * ROWS; i++) {
+    let col = i % COLUMNS;
+    let row = floor(i / COLUMNS);
+    let x = GRID_X + col * CELL;
+    let y = GRID_Y + row * CELL;
+    if (mouseX >= x && mouseX <= x + BOX && mouseY >= y && mouseY <= y + BOX) return i;
+  }
+  return -1;
+}
+
+function getBoxLabel(i) {
+  let age = floor(i / COLUMNS);
+  let boxDate = new Date(birthDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+  let month = boxDate.getMonth();
+  let season = (month <= 1 || month === 11) ? 'winter'
+             : month <= 4 ? 'spring'
+             : month <= 7 ? 'summer' : 'fall';
+  return `age ${age} · ${season} ${boxDate.getFullYear()}`;
+}
+
+function drawTooltip(maxVisible) {
+  let i = getHoveredBox();
+  if (i < 0 || i >= maxVisible) return;
+  let label = getBoxLabel(i);
+  textFont('Menlo');
+  textSize(10);
+  textAlign(LEFT, CENTER);
+  let tw = textWidth(label) + 16;
+  let th = 22;
+  let tx = mouseX + 12;
+  let ty = mouseY - 28;
+  if (tx + tw > CANVAS_W) tx = mouseX - tw - 12; // flip left if too close to edge
+  if (ty < GRID_Y) ty = mouseY + 10;             // flip down if too close to top
+  fill(15, 230);
+  stroke(55);
+  strokeWeight(1);
+  rect(tx, ty, tw, th, 4);
+  noStroke();
+  fill(190);
+  text(label, tx + 8, ty + th / 2);
+}
+
 //SCENES                                                                                                 
 const inputScene = { // screen 1: ask for birthday                                                                                                               
   digits: '', //                                                                                                                                                                                                            
@@ -110,7 +158,7 @@ const inputScene = { // screen 1: ask for birthday
       text('mm/dd/yyyy', CANVAS_W / 2, by + bh / 2);                                                                                                             
     } else {                                              
       fill(255);                                                                                                                                                 
-      text(formatDigits(this.digits) + cursor, CANVAS_W / 2, by + bh / 2); //i want the cursor to blink                                                                                    
+      text(formatDigits(this.digits) + caret, CANVAS_W / 2, by + bh / 2);                                                                                    
     }                                                                                                                                                                                                                  
     textSize(11);                                                                                                                                                
     fill(60);
@@ -211,9 +259,10 @@ const gridLivedScene = {
     fill(255);                                                                                                                                                   
     text("that's " + weeksLived.toLocaleString() + ' weeks', CANVAS_W / 2, 50);
                                                                                                                                                                  
-    drawGrid(floor(this.progress));                       
+    drawGrid(floor(this.progress));
+    drawTooltip(floor(this.progress));
 
-    if (this.doneTime !== null && millis() - this.doneTime > 5000) goTo(gridFullScene); // wait 5 seconds, then show the full grid                               
+    if (this.doneTime !== null && millis() - this.doneTime > 5000) goTo(gridFullScene);
   }
 };                                                                                                                                                               
                                                           
@@ -242,6 +291,7 @@ const gridFullScene = { // screen 5: reveal the rest of the grid (weeks remainin
     fill(255, a);                                                                                                                                                
     text(weeksRemaining.toLocaleString() + ' weeks left', CANVAS_W / 2, 50);
                                                                                                                                                                  
-    drawGrid(floor(this.totalVisible));                   
+    drawGrid(floor(this.totalVisible));
+    drawTooltip(floor(this.totalVisible));
   }
 };       
