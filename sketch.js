@@ -1,15 +1,13 @@
 //interactive narrative of "time is finite" | final project for creative coding which is supposed to communicate a sense of urgency for people to make good use of their time & cherish memories :)
 
 //CONSTANTS
-const CANVAS_W = 600;         
-const CANVAS_H = 900;
 const COLUMNS  = 52; // 52 weeks for a year                                                                                                                       
 const ROWS = 80; //80 years in a life                                                                                                                       
 
 //box size
 const CELL= 9;                                                                                                       
 const BOX = 7;                                                                                                                  
-const GRID_X = Math.floor((CANVAS_W - COLUMNS * CELL) / 2); // center the grid horizontally                                                                      
+const GRID_X = Math.floor((width - COLUMNS * CELL) / 2); // center the grid horizontally                                                                      
 const GRID_Y = 90; // how far down the grid starts                                                                                                               
 
 //GLOBAL VARIABLES                                                                                                                                               
@@ -24,7 +22,7 @@ function preload() { //load font
 }                                                                                                                                                                
                                                           
 function setup() { // runs once at the beginning                                                                                                                 
-  createCanvas(CANVAS_W, CANVAS_H);                       
+  createCanvas(width, height);                       
   goTo(inputScene); // start on the birthday input screen                                                                                                        
 }
                                                                                                                                                                  
@@ -120,7 +118,7 @@ function drawTooltip(maxVisible) {
   let th = 22;
   let tx = mouseX + 12;
   let ty = mouseY - 28;
-  if (tx + tw > CANVAS_W) tx = mouseX - tw - 12; // flip left if too close to edge
+  if (tx + tw > width) tx = mouseX - tw - 12; // flip left if too close to edge
   if (ty < GRID_Y) ty = mouseY + 10;             // flip down if too close to top
   fill(15, 230);
   stroke(55);
@@ -136,15 +134,15 @@ const inputScene = { // screen 1: ask for birthday
   digits: '', //                                                                                                                                                                                                            
   onEnter() { this.digits = ''; }, // clear the input box when we arrive                                                                                                                                                            
   draw() {                                                                                                                                                       
-    let bx = CANVAS_W / 2 - 135, by = CANVAS_H / 2, bw = 270, bh = 50;                                                                                                                                           
+    let bx = width / 2 - 135, by = height / 2, bw = 270, bh = 50;                                                                                                                                           
     noStroke();                                                                                                                                                  
     textAlign(CENTER, CENTER);                                                                                                                                   
     textFont('Menlo');                                                                                                                                           
     textSize(12);                                         
     fill(255);
-    text('hi friend!', CANVAS_W / 2, CANVAS_H / 2 - 60);
+    text('hi friend!', width / 2, height / 2 - 60);
     fill(145);                                                                                                                                                   
-    text('when is your birthday?', CANVAS_W / 2, CANVAS_H / 2 - 24);                                                                                             
+    text('when is your birthday?', width / 2, height / 2 - 24);                                                                                             
                                                                                                                                                                  
     // draw the input box                                                                                                                                        
     fill(20); 
@@ -155,14 +153,14 @@ const inputScene = { // screen 1: ask for birthday
     textSize(16);                                                                                                                                                
     if (this.digits.length===0) { // showing a placeholder if nothing typed yet; this.digits is the inputted date                                                                               
       fill(50);
-      text('mm/dd/yyyy', CANVAS_W / 2, by + bh / 2);                                                                                                             
+      text('mm/dd/yyyy', width / 2, by + bh / 2);                                                                                                             
     } else {                                              
       fill(255);                                                                                                                                                 
-      text(formatDigits(this.digits) + caret, CANVAS_W / 2, by + bh / 2);                                                                                    
+      text(formatDigits(this.digits) + caret, width / 2, by + bh / 2);                                                                                    
     }                                                                                                                                                                                                                  
     textSize(11);                                                                                                                                                
     fill(60);
-    text('press enter ↵ to continue', CANVAS_W/2, CANVAS_H /2 + 90);                                                                                                      
+    text('press enter ↵ to continue', width/2, height /2 + 90);                                                                                                      
   },                                                                                                                                                             
 
   handleKey() {                                                                                                                                                  
@@ -192,12 +190,12 @@ const transitionScene = { // screen 2: show how many years they've lived, fades 
     textFont('Menlo');                                                                                                                                           
     textSize(13);
     fill(135, a);                                                                                                                                                
-    text('you made it through', CANVAS_W / 2, CANVAS_H / 2 - 34);
+    text('you made it through', width / 2, height / 2 - 34);
                                                                                                                                                                  
     textFont(canelaFont);
     textSize(70);                                                                                                                                                
     fill(255, a);                                         
-    text(yearsLived + ' years', CANVAS_W / 2, CANVAS_H / 2 + 22);
+    text(yearsLived + ' years', width / 2, height / 2 + 22);
                                                                                                                                                                  
     if (elapsed > 2200) goTo(introBoxScene); // move on after 2.2 seconds                                                                                        
   }                                                                                                                                                              
@@ -215,16 +213,16 @@ const introBoxScene = { // screen 3: show what one week looks like as a box
     textFont('Menlo');                                    
     textSize(13);
     fill(135, a);
-    text('this box represents 1 week of your life...', CANVAS_W / 2, CANVAS_H / 2 - 70);
+    text('this box represents 1 week of your life...', width / 2, height / 2 - 70);
                                                                                                                                                                  
     //1 white box to represnet life lived                                                                                                                                                                                                                               
     fill(215 , a);                                                                                                                                      
-    rect(CANVAS_W / 2 - 27, CANVAS_H / 2 - 22, 22, 22);
+    rect(width / 2 - 27, height / 2 - 22, 22, 22);
                                                                                                                                                                  
     if (elapsed > 2000) { // show the click prompt after 2 seconds
       fill(70, a);                                                                                                                                               
       textSize(11);                                       
-      text('click to continue →', CANVAS_W / 2, CANVAS_H / 2 + 60);                                                                                              
+      text('click to continue →', width / 2, height / 2 + 60);                                                                                              
     }
   },                                                                                                                                                             
                                                           
@@ -252,12 +250,12 @@ const gridLivedScene = {
     textFont('Menlo');
     textSize(12);
     fill(135);
-    text('you have lived ' + yearsLived + ' years', CANVAS_W / 2, 24);                                                                                           
+    text('you have lived ' + yearsLived + ' years', width / 2, 24);                                                                                           
 
     textFont(canelaFont);                                                                                                                                        
     textSize(28);                                         
     fill(255);                                                                                                                                                   
-    text("that's " + weeksLived.toLocaleString() + ' weeks', CANVAS_W / 2, 50);
+    text("that's " + weeksLived.toLocaleString() + ' weeks', width / 2, 50);
                                                                                                                                                                  
     drawGrid(floor(this.progress));
     drawTooltip(floor(this.progress));
@@ -284,12 +282,12 @@ const gridFullScene = { // screen 5: reveal the rest of the grid (weeks remainin
     textFont('Menlo');                                                                                                                                           
     textSize(12);
     fill(135, a);                                                                                                                                                
-    text('if you live until 80, you have', CANVAS_W / 2, 24);
+    text('if you live until 80, you have', width / 2, 24);
 
     textFont(canelaFont);
     textSize(28);
     fill(255, a);                                                                                                                                                
-    text(weeksRemaining.toLocaleString() + ' weeks left', CANVAS_W / 2, 50);
+    text(weeksRemaining.toLocaleString() + ' weeks left', width / 2, 50);
                                                                                                                                                                  
     drawGrid(floor(this.totalVisible));
     drawTooltip(floor(this.totalVisible));
