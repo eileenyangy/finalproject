@@ -1,34 +1,38 @@
-//interactive narrative of "time is finite" | final project for creative coding which is supposed to communicate a sense of urgency for people to make good use of their time & cherish memories :)
+//interactive narrative of "time is finite"
+//final project for creative coding 
+//goal: communicate a sense of urgency for people to cherish their time, memories, & goals!
+
 
 //CONSTANTS
-const COLUMNS  = 52; // 52 weeks for a year                                                                                                                       
-const ROWS = 80; //80 years in a life                                                                                                                       
+const COLUMNS  = 52; // 52 weeks for a year
+const ROWS = 80; //80 years in a life
 
 //box size
-const CELL= 9;                                                                                                       
-const BOX = 7;                                                                                                                  
-const GRID_X = Math.floor((width - COLUMNS * CELL) / 2); // center the grid horizontally                                                                      
+const CELL= 10;
+const BOX = 8;
+const GRID_X = Math.floor((600 - COLUMNS * CELL) / 2); // center the grid horizontally                                                                      
 const GRID_Y = 90; // how far down the grid starts                                                                                                               
 
 //GLOBAL VARIABLES                                                                                                                                               
 let canelaFont;
+let tickSound;
 let scene; // which screen we're on right now
 let birthDate; // stored so hover tooltips can compute dates per box
 let weeksLived, yearsLived, weeksRemaining; // the numbers we calculate from the birthday
-let caret = ''; // blinking cursor character for the input field
+let lastHoveredBox = -1;
                                                                                                                                                                  
-function preload() { //load font                                                                                                          
-  canelaFont = loadFont('data/CanelaText-Light-Trial.otf');                                                                                                      
+function preload() { //load font
+  canelaFont = loadFont('data/CanelaText-Light-Trial.otf');
+  tickSound = loadSound('data/tick.mp3');
 }                                                                                                                                                                
                                                           
 function setup() { // runs once at the beginning                                                                                                                 
-  createCanvas(width, height);                       
+  createCanvas(600, 900);                       
   goTo(inputScene); // start on the birthday input screen                                                                                                        
 }
                                                                                                                                                                  
 function draw() {
   background(10);
-  caret = frameCount % 40 < 20 ? '|' : ' '; // blink every ~0.3s
   scene.draw();
 }                                                                                                                                                                
                                                                                                                                                                  
@@ -63,8 +67,8 @@ function drawGrid(count) { // draw `count` boxes, one box = one week of life
                                                           
 function computeWeeks(bd) {
   birthDate = bd; // store globally so tooltip can compute per-box dates
-  let msPerWeek = 7 * 24 * 60 * 60 * 1000;
-  weeksLived     = floor((Date.now() - bd) / msPerWeek);
+  let msPerWeek = 1000 * 60 * 60 * 24 * 7;
+  weeksLived    = floor((Date.now() - bd) / msPerWeek);
   yearsLived     = floor(weeksLived / COLUMNS);
   weeksRemaining = COLUMNS * ROWS - weeksLived;
 }                                                                                                                                                                
@@ -78,12 +82,7 @@ function parseDate(str) { // turn "mm/dd/yyyy" into a real date, or null if it's
   if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null; // catches things like feb 31                                  
   return date;                                                                                                                                                   
 }                                                                                                                                                                
-                                                                                                                                                                 
-function formatDigits(digits) { // add slashes as the user types, like "12/25/1999"                                                                              
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return digits.slice(0, 2) + '/' + digits.slice(2);                                                                                     
-  return digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4, 8);                                                                               
-}                                                                                                                                                                
+                                                                                                                                                                                                                                                                                                                         
                                                                                                                                                                  
 // HOVER TOOLTIP
 function getHoveredBox() {
@@ -109,6 +108,10 @@ function getBoxLabel(i) {
 
 function drawTooltip(maxVisible) {
   let i = getHoveredBox();
+  if (i !== lastHoveredBox) {
+    lastHoveredBox = i;
+    if (i >= 0 && i < maxVisible) tickSound.play();
+  }
   if (i < 0 || i >= maxVisible) return;
   let label = getBoxLabel(i);
   textFont('Menlo');
@@ -130,7 +133,7 @@ function drawTooltip(maxVisible) {
 }
 
 //SCENES                                                                                                 
-const inputScene = { // screen 1: ask for birthday                                                                                                               
+const inputScene = { // This is the first screen the user sees, inputting BIRTHDAY                                                                                                            
   digits: '', //                                                                                                                                                                                                            
   onEnter() { this.digits = ''; }, // clear the input box when we arrive                                                                                                                                                            
   draw() {                                                                                                                                                       
@@ -138,25 +141,25 @@ const inputScene = { // screen 1: ask for birthday
     noStroke();                                                                                                                                                  
     textAlign(CENTER, CENTER);                                                                                                                                   
     textFont('Menlo');                                                                                                                                           
-    textSize(12);                                         
+    textSize(14);                                         
     fill(255);
     text('hi friend!', width / 2, height / 2 - 60);
-    fill(145);                                                                                                                                                   
-    text('when is your birthday?', width / 2, height / 2 - 24);                                                                                             
+    fill(255);                                                                                                                                                   
+    text('when is your birthday?', width / 2, height / 2 - 20);                                                                                             
                                                                                                                                                                  
     // draw the input box                                                                                                                                        
-    fill(20); 
+    fill("#282427"); 
     stroke(50); 
     strokeWeight(1);                
-    rect(bx, by, bw, bh, 25);                                                                                                                                    
+    rect(bx, by, bw, bh, 999);                                                                                                                                    
     noStroke();                                           
     textSize(16);                                                                                                                                                
     if (this.digits.length===0) { // showing a placeholder if nothing typed yet; this.digits is the inputted date                                                                               
-      fill(50);
+      fill("#E7E7E7");
       text('mm/dd/yyyy', width / 2, by + bh / 2);                                                                                                             
     } else {                                              
       fill(255);                                                                                                                                                 
-      text(formatDigits(this.digits) + caret, width / 2, by + bh / 2);                                                                                    
+      text(this.digits, width / 2, by + bh / 2);                                                                                    
     }                                                                                                                                                                                                                  
     textSize(11);                                                                                                                                                
     fill(60);
@@ -165,13 +168,13 @@ const inputScene = { // screen 1: ask for birthday
 
   handleKey() {                                                                                                                                                  
     if (keyCode === ENTER) { //submit the date           
-      let date = parseDate(formatDigits(this.digits));
+      let date = parseDate(this.digits);
       if (!date || date > new Date()) return; //do nothing if the date is invalid                                                                               
       computeWeeks(date);                                                                                                                                        
       goTo(transitionScene);                                                                                                                                     
     } else if (keyCode === BACKSPACE) { // delete last digit                                                                                                     
       this.digits = this.digits.slice(0, -1);                                                                                                                    
-    } else if (key >= '0' && key <= '9' && this.digits.length < 8) { // add a digit
+    } else if ((key >= '0' && key <= '9' || key === '/') && this.digits.length < 10) {
       this.digits += key;                                                                                                                                        
     }                                                     
   }                                                                                                                                                              
@@ -180,10 +183,15 @@ const inputScene = { // screen 1: ask for birthday
 const transitionScene = { // screen 2: show how many years they've lived, fades in                                                                               
   onEnter() { this.startTime = millis(); }, // record when we arrived
             
-  //DRAW TRANSITION SCENE
+  //DRAW TRANSITION SCENE 
   draw() {                                                
     let elapsed = millis() - this.startTime;
-    let a = constrain(map(elapsed, 0, 600, 0, 255), 0, 255); // constrain is                                                                                                                                                                                               
+    let a;
+    if (elapsed < 600) {
+      a = (elapsed / 600) * 255;
+    } else {
+      a = 255;
+    } // constrain is                                                                                                                                                                                               
     noStroke();                                                                                                                                                  
     textAlign(CENTER, CENTER);                                                                                                                                   
                                                           
@@ -206,7 +214,12 @@ const introBoxScene = { // screen 3: show what one week looks like as a box
                                                                                                                                                                  
   draw() {                                                
     let elapsed = millis() - this.startTime;                                                                                                                     
-    let a = constrain(map(elapsed, 0, 600, 0, 255), 0, 255); // fade in
+    let a;
+    if (elapsed < 600) {
+      a = (elapsed / 600) * 255;
+    } else {
+      a = 255;
+    } // fade in
                                                                                                                                                                  
     noStroke();
     textAlign(CENTER, CENTER);                                                                                                                                   
@@ -219,23 +232,15 @@ const introBoxScene = { // screen 3: show what one week looks like as a box
     fill(215 , a);                                                                                                                                      
     rect(width / 2 - 27, height / 2 - 22, 22, 22);
                                                                                                                                                                  
-    if (elapsed > 2000) { // show the click prompt after 2 seconds
-      fill(70, a);                                                                                                                                               
-      textSize(11);                                       
-      text('click to continue →', width / 2, height / 2 + 60);                                                                                              
-    }
-  },                                                                                                                                                             
-                                                          
-  handleClick() {
-    if (millis() - this.startTime > 2000) goTo(gridLivedScene); // only allow click after 2 seconds
-  }                                                                                                                                                              
+    if (elapsed > 5000) goTo(gridLivedScene);
+  }
 };
                              
 //SCREEN 4: Animate the part of filling in all the weeks you've lived
 const gridLivedScene = { 
   onEnter() {
     this.progress = 0; // start drawing from box 0                                                                                                            
-    //this.doneTime = null; // we don't know when the animation will finish yet
+    this.doneTime = null; // idk when animation
   },                                                                                                                                                             
                                                           
   draw() {
@@ -251,8 +256,8 @@ const gridLivedScene = {
     textSize(12);
     fill(135);
     text('you have lived ' + yearsLived + ' years', width / 2, 24);                                                                                           
-
-    textFont(canelaFont);                                                                                                                                        
+    
+    textFont('Menlo');                                                                                                                                    
     textSize(28);                                         
     fill(255);                                                                                                                                                   
     text("that's " + weeksLived.toLocaleString() + ' weeks', width / 2, 50);
@@ -272,7 +277,12 @@ const gridFullScene = { // screen 5: reveal the rest of the grid (weeks remainin
 
   draw() {                                                                                                                                                       
     let elapsed = millis() - this.startTime;              
-    let a = constrain(map(elapsed, 0, 600, 0, 255), 0, 255); // fade in the text
+    let a;
+    if (elapsed < 600) {
+      a = (elapsed / 600) * 255;
+    } else {
+      a = 255;
+    } // fade in the text
                                                                                                                                                                  
     if (this.totalVisible < COLUMNS * ROWS) this.totalVisible += 3; // reveal 3 more boxes per frame
                                                                                                                                                                  
@@ -284,7 +294,7 @@ const gridFullScene = { // screen 5: reveal the rest of the grid (weeks remainin
     fill(135, a);                                                                                                                                                
     text('if you live until 80, you have', width / 2, 24);
 
-    textFont(canelaFont);
+    textFont('Menlo');
     textSize(28);
     fill(255, a);                                                                                                                                                
     text(weeksRemaining.toLocaleString() + ' weeks left', width / 2, 50);
