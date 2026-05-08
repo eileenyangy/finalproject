@@ -20,6 +20,7 @@ let scene; // which screen we're on right now
 let birthDate; // stored so hover tooltips can compute dates per box
 let weeksLived, yearsLived, weeksRemaining; // the numbers we calculate from the birthday
 let lastHoveredBox = -1;
+let userGoal = ''; // stores the goal the user types in
                                                                                                                                                                  
 function preload() { //load font
   canelaFont = loadFont('data/CanelaText-Light-Trial.otf');
@@ -45,23 +46,53 @@ function goTo(s) { // switch to a new screen
 }
 
 //DRAWING THE GRID
-function drawGrid(count) { // draw `count` boxes, one box = one week of life
-  noStroke();                                                                                                                                                    
+function isGoalHovered(maxVisible) {
+  if (userGoal === '') return false;
+  let goalIdx = weeksLived + 13;
+  if (goalIdx >= maxVisible) return false;
+  let goalCol = goalIdx % COLUMNS;
+  let goalRow = floor(goalIdx / COLUMNS);
+  let ex = GRID_X + (goalCol - 1) * CELL;
+  let ey = GRID_Y + (goalRow - 1) * CELL;
+  let es = 2 * CELL + BOX;
+  return mouseX >= ex && mouseX <= ex + es && mouseY >= ey && mouseY <= ey + es;
+}
+
+function drawGrid(count) {
+  noStroke();
+  let goalIdx = weeksLived + 13;
+  let goalCol = goalIdx % COLUMNS;
+  let goalRow = floor(goalIdx / COLUMNS);
+  let goalX = GRID_X + goalCol * CELL;
+  let goalY = GRID_Y + goalRow * CELL;
+  let expanded = isGoalHovered(count);
+
   for (let i = 0; i < count; i++) {
-    let col = i % COLUMNS; // which column this box lives in                                                                                                     
-    let row = floor(i / COLUMNS); // which row this box lives in                                                                                                 
-    let x = GRID_X + col * CELL; //actual x position on canvas
-    let y = GRID_Y + row * CELL; //actual y position on canvas                                                                                                  
-                                                                                                                                                                 
-    if (i === weeksLived) { // this is the current week — make it pulse red                                                                                      
-      let pulse = map(sin(frameCount * 0.12), -1, 1, 100, 255);                                                                                                  
-      fill(210, 50, 50, pulse);                                                                                                                                  
-    } else if (i < weeksLived) { // weeks already lived — light color                                                                                            
-      fill(210, 210, 200);                                                                                                                                       
-    } else { //weeks not yet lived yet                                                                                                                     
-      fill(32);                                                                                                                                                  
-    }                                                                                                                                                                                                      
-    rect(x, y, BOX, BOX, 1.5); //drawing box                                                                                                                               
+    let col = i % COLUMNS;
+    let row = floor(i / COLUMNS);
+    let x = GRID_X + col * CELL;
+    let y = GRID_Y + row * CELL;
+
+    // skip the 3x3 area around the goal when expanded
+    if (expanded && abs(col - goalCol) <= 1 && abs(row - goalRow) <= 1) continue;
+
+    if (i === weeksLived) {
+      let pulse = map(sin(frameCount * 0.12), -1, 1, 100, 255);
+      fill(210, 50, 50, pulse);
+    } else if (i === goalIdx && userGoal !== '') {
+      fill(200, 165, 60);
+    } else if (i < weeksLived) {
+      fill(210, 210, 200);
+    } else {
+      fill(32);
+    }
+    rect(x, y, BOX, BOX, 1.5);
+  }
+
+  // draw expanded goal box on top
+  if (expanded) {
+    fill(200, 165, 60);
+    rect(goalX - CELL, goalY - CELL, 2 * CELL + BOX, 2 * CELL + BOX, 3);
   }
 }                                                                                                                                                                
                                                           
@@ -73,6 +104,12 @@ function computeWeeks(bd) {
   weeksRemaining = COLUMNS * ROWS - weeksLived;
 }                                                                                                                                                                
                                                                                                                                                                  
+function formatDigits(d) { // insert slashes for display: "01151990" → "01/15/1990"
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return d.slice(0,2) + '/' + d.slice(2);
+  return d.slice(0,2) + '/' + d.slice(2,4) + '/' + d.slice(4);
+}
+
 function parseDate(str) { // turn "mm/dd/yyyy" into a real date, or null if it's bad                                                                             
   let parts = str.split('/'); //splitting dates into parts                             
   if (parts.length !== 3) return null; //null is basically just no date                                                                                                                           
@@ -103,11 +140,20 @@ function getBoxLabel(i) {
   let season = (month <= 1 || month === 11) ? 'winter'
              : month <= 4 ? 'spring'
              : month <= 7 ? 'summer' : 'fall';
+
+  // if this is the goal box, show the goal + how far away it is
+  if (i === weeksLived + 13 && userGoal !== '') {
+    let weeksAway = i - weeksLived; // weeks until the goal
+    let daysAway  = weeksAway * 7;  // same but in days
+    return `goal: "${userGoal}" · ${weeksAway} weks (${daysAway} days)`;
+  }
+
   return `age ${age} · ${season} ${boxDate.getFullYear()}`;
 }
 
 function drawTooltip(maxVisible) {
   let i = getHoveredBox();
+  if (isGoalHovered(maxVisible)) i = weeksLived + 13;
   if (i !== lastHoveredBox) {
     lastHoveredBox = i;
     if (i >= 0 && i < maxVisible) tickSound.play();
@@ -158,8 +204,8 @@ const inputScene = { // This is the first screen the user sees, inputting BIRTHD
       fill("#E7E7E7");
       text('mm/dd/yyyy', width / 2, by + bh / 2);                                                                                                             
     } else {                                              
-      fill(255);                                                                                                                                                 
-      text(this.digits, width / 2, by + bh / 2);                                                                                    
+      fill(255);
+      text(formatDigits(this.digits), width / 2, by + bh / 2);
     }                                                                                                                                                                                                                  
     textSize(11);                                                                                                                                                
     fill(60);
@@ -168,14 +214,14 @@ const inputScene = { // This is the first screen the user sees, inputting BIRTHD
 
   handleKey() {                                                                                                                                                  
     if (keyCode === ENTER) { //submit the date           
-      let date = parseDate(this.digits);
+      let date = parseDate(formatDigits(this.digits));
       if (!date || date > new Date()) return; //do nothing if the date is invalid                                                                               
       computeWeeks(date);                                                                                                                                        
       goTo(transitionScene);                                                                                                                                     
-    } else if (keyCode === BACKSPACE) { // delete last digit                                                                                                     
-      this.digits = this.digits.slice(0, -1);                                                                                                                    
-    } else if ((key >= '0' && key <= '9' || key === '/') && this.digits.length < 10) {
-      this.digits += key;                                                                                                                                        
+    } else if (keyCode === BACKSPACE) {
+      this.digits = this.digits.slice(0, -1);
+    } else if (key >= '0' && key <= '9' && this.digits.length < 8) {
+      this.digits += key;
     }                                                     
   }                                                                                                                                                              
 };                                                        
@@ -230,7 +276,7 @@ const introBoxScene = { // screen 3: show what one week looks like as a box
                                                                                                                                                                  
     //1 white box to represnet life lived                                                                                                                                                                                                                               
     fill(215 , a);                                                                                                                                      
-    rect(width / 2 - 27, height / 2 - 22, 22, 22);
+    rect(width / 2 - 27, height / 2 - 22, 22, 22, 4);
                                                                                                                                                                  
     if (elapsed > 5000) goTo(gridLivedScene);
   }
@@ -265,10 +311,56 @@ const gridLivedScene = {
     drawGrid(floor(this.progress));
     drawTooltip(floor(this.progress));
 
-    if (this.doneTime !== null && millis() - this.doneTime > 5000) goTo(gridFullScene);
+    if (this.doneTime !== null && millis() - this.doneTime > 5000) goTo(goalScene);
   }
 };                                                                                                                                                               
                                                           
+// SCREEN 5: ask the user what they want to acomplish in the next 3 months
+const goalScene = {
+  text: '',
+  onEnter() { this.text = ''; }, // reset when we arrive
+
+  draw() {
+    let bx = width / 2 - 175, by = height / 2, bw = 350, bh = 50;
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textFont('Menlo');
+    textSize(14);
+    fill(255);
+    text('what do you want to accomplish', width / 2, height / 2 - 60);
+    text('in the next 3 months?', width / 2, height / 2 - 36);
+
+    // draw the input box (same style as birthday input)
+    fill('#282427');
+    stroke(50);
+    strokeWeight(1);
+    rect(bx, by, bw, bh, 999);
+    noStroke();
+    textSize(14);
+    if (this.text.length === 0) { // placeholder if nothings been typed yet
+      fill('#E7E7E7');
+      text('type your goal...', width / 2, by + bh / 2);
+    } else {
+      fill(255);
+      text(this.text, width / 2, by + bh / 2);
+    }
+    textSize(11);
+    fill(60);
+    text('press enter ↵ to continue', width / 2, height / 2 + 90);
+  },
+
+  handleKey() {
+    if (keyCode === ENTER && this.text.length > 0) { // only continue if somthing was typed
+      userGoal = this.text;
+      goTo(gridFullScene);
+    } else if (keyCode === BACKSPACE) {
+      this.text = this.text.slice(0, -1); // delete last character
+    } else if (key.length === 1 && this.text.length < 60) { // any key, max 60 chars
+      this.text += key;
+    }
+  }
+};
+
 const gridFullScene = { // screen 5: reveal the rest of the grid (weeks remaining)                                                                               
   onEnter() {
     this.startTime    = millis();                                                                                                                                
