@@ -34,7 +34,7 @@ let tickSound;
 let scene; // currently active scene object
 let birthDate;
 let weeksLived, yearsLived, weeksRemaining;
-let birthdayWeeks = new Set();
+let birthdayWeeks = new Set(); 
 //set is used here because .has(i) checks membership in constant time, unlike looping through an array
 //unlike an array which would need to loop through every element to match - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set
 
@@ -167,23 +167,19 @@ function computeWeeks(bd) {
   let msPerWeek = 1000 * 60 * 60 * 24 * 7;
   // milliseconds per week: 1000ms × 60s × 60min × 24hr × 7days = 604,800,000
 
-  weeksLived     = floor((Date.now() - bd) / msPerWeek);
+  weeksLived     = floor((Date.now() - bd) / msPerWeek); // CITATION: https://editor.p5js.org/kjhollen/sketches/B1t0ov4ab
+  //date.now gives current time in ms since Jan 1, 1970! subtracting birthday wld give us elapsed time in ms since birth
   // Date.now() = current time in ms. Subtracting birth gives elapsed ms. Dividing by msPerWeek = weeks.
 
   yearsLived     = floor(weeksLived / COLUMNS);
-  // dividing total weeks by 52 (COLUMNS) gives us full years lived -- floor drops the partial year
   weeksRemaining = COLUMNS * targetYears - weeksLived;
-  // total weeks in a lifetime (52 * 80 = 4160) minus weeks already lived = weeks left !!
 
   birthdayWeeks.clear();
-  // reset the set before recalculating so we dont stack up duplicates from a prev session
   for (let y = 1; y <= targetYears; y++) {
     // create a Date for the birthday in each future year, keeping the same month and day
     let bday = new Date(bd.getFullYear() + y, bd.getMonth(), bd.getDate());
     let idx  = floor((bday - bd) / msPerWeek);
-    // same math as above -- how many weeks from birth to this specific bday
     if (idx >= 0 && idx < COLUMNS * targetYears) birthdayWeeks.add(idx);
-    // only add it if its a valid box within the grid range (0 to 4160)
   }
 }
 
@@ -231,16 +227,21 @@ function getBoxLabel(i) {
       return 'GOAL: "' + goals[gi].text.toUpperCase() + '" · ' + goals[gi].days + ' DAYS';
     }
   }
-  let age     = floor(i / COLUMNS);
+  let age= floor(i / COLUMNS);
   let boxDate = new Date(birthDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
   // birthDate.getTime() in ms + i weeks in ms gives the calendar date of this box
-  let month   = boxDate.getMonth(); // 0 = Jan, 11 = Dec
-
-  let season = (month <= 1 || month === 11) ? 'winter'
-             : month <= 4                   ? 'spring'
-             : month <= 7                   ? 'summer'
-             :                               'fall';
-  // chained ternary operators map month numbers to season names
+  let month= boxDate.getMonth(); // 0 = Jan, 11 = Dec
+  let season;
+  if (month <= 1||month === 11) {
+    season = 'winter';
+  } else if(month <= 4) {
+    season = 'spring';
+  } else if (month <= 7) {
+    season='summer';
+  } else {
+    season ='fall';
+  }
+  //ref: AI 
 
   return 'AGE ' + age + ' · ' + season.toUpperCase() + ' ' + boxDate.getFullYear();
 }
@@ -698,7 +699,8 @@ const gridFullScene = {
     text('IF YOU LIVE UNTIL ' + targetYears + ', YOU HAVE', GRID_CX, 24);
     textSize(28);
     fill(255, a);
-    text(weeksRemaining.toLocaleString() + ' WEEKS LEFT', GRID_CX, 50);
+    text(weeksRemaining.toLocaleString() + ' WEEKS LEFT TO LIVE', GRID_CX, 50); //.toLocaleString() adds commas to large numbers for readability
+    //https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toLocaleString
 
     // when the API call finishes in the background, add the goal to the list
     if (fetchDone && pendingGoal !== null) {
