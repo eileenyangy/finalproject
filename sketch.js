@@ -1,129 +1,216 @@
-//interactive narrative of "time is finite"
-//final project for creative coding 
-//goal: communicate a sense of urgency for people to cherish their time, memories, & goals!
+//TIME IS FINITE INTERACTIVE NARRATIVE! CREATIVE CODING FINAL PROJECT :D - EILEEN YANG
+// goal: make people feel the urgency of their time and motivate goal-setting
+
+// --- CONSTANTS ---
+
+const COLUMNS = 52; // 52 weeks in a year = 52 columns in the grid
+let targetYears = 80; // default lifespan; user can change to 60 or 100
+
+const CELL = 10; // each grid cell is 10x10px (box + gap)
+const BOX  = 8;  // visible box is 8x8px; the 2px gap comes from CELL - BOX
+
+// CITATION: Math.floor() — https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/floor
+const GRID_X = Math.floor((600 - COLUMNS * CELL) / 2);
+// (600 - 52*10) / 2 = 40px left margin, centering the 520px-wide grid in the 600px grid area
+
+const GRID_Y = 90;
+const GRID_AREA_WIDTH = 600; // grid lives in the left 600px of the 800px canvas
+const GRID_CX = 300; // horizontal center of the grid area
+const SIDEBAR_X = 620; // where the sidebar starts (right of the grid)
+const SIDEBAR_W = 170; // sidebar width in pixels
+
+// Goal colors by duration — pink = urgent (30D), blue = medium (60D), green = long (90D)
+function getGoalColor(days) {
+  if (days === 30) return '#E05080';
+  if (days === 60) return '#4A90D9';
+  return '#50C878';
+}
 
 
-//CONSTANTS
-const COLUMNS  = 52; // 52 weeks for a year
-const ROWS = 80; //80 years in a life
+// --- GLOBAL VARIABLES ---
 
-//box size
-const CELL= 10;
-const BOX = 8;
-const GRID_X = Math.floor((600 - COLUMNS * CELL) / 2); // center the grid horizontally                                                                      
-const GRID_Y = 90; // how far down the grid starts                                                                                                               
-
-//GLOBAL VARIABLES                                                                                                                                               
 let canelaFont;
 let tickSound;
-let scene; // which screen we're on right now
-let birthDate; // stored so hover tooltips can compute dates per box
-let weeksLived, yearsLived, weeksRemaining; // the numbers we calculate from the birthday
+let scene; // currently active scene object
+let birthDate;
+let weeksLived, yearsLived, weeksRemaining;
+let birthdayWeeks = new Set();
+//set is used here because .has(i) checks membership in constant time, unlike looping through an array
+
 let lastHoveredBox = -1;
-let userGoal = ''; // stores the goal the user types in
-                                                                                                                                                                 
-function preload() { //load font
+
+let goals= []; // array of { text, days, color, recs, boxIdx }
+let pendingGoal = null; // goal being processed during the loading screen
+let pendingRecs = [];
+let goalDays= 90;
+let fetchDone= false;
+
+
+// --- PRELOAD ---
+// CITATION: loadFont(), loadSound() — https://p5js.org/reference/p5/loadFont/
+function preload() {
   canelaFont = loadFont('data/CanelaText-Light-Trial.otf');
-  tickSound = loadSound('data/tick.mp3');
-}                                                                                                                                                                
-                                                          
-function setup() { // runs once at the beginning                                                                                                                 
-  createCanvas(600, 900);                       
-  goTo(inputScene); // start on the birthday input screen                                                                                                        
+  tickSound= loadSound('data/tick.mp3');
 }
-                                                                                                                                                                 
+
+
+// --- SETUP ---
+// Canvas is 800x930: 600px grid area + 200px sidebar
+function setup() {
+  createCanvas(800, 930);
+  goTo(inputScene);
+}
+
+
 function draw() {
-  background(10);
+  background('#000000');
   scene.draw();
-}                                                                                                                                                                
-                                                                                                                                                                 
-function keyPressed()   { scene.handleKey?.(); }                                                                
-function mousePressed() { scene.handleClick?.(); } 
-                                                                                                                                                                 
-function goTo(s) { // switch to a new screen
-  scene = s;                                                                                                                                                     
-  scene.onEnter?.(); // let the new screen set itself up  
 }
 
-//DRAWING THE GRID
-function isGoalHovered(maxVisible) {
-  if (userGoal === '') return false;
-  let goalIdx = weeksLived + 13;
-  if (goalIdx >= maxVisible) return false;
-  let goalCol = goalIdx % COLUMNS;
-  let goalRow = floor(goalIdx / COLUMNS);
-  let ex = GRID_X + (goalCol - 1) * CELL;
-  let ey = GRID_Y + (goalRow - 1) * CELL;
-  let es = 2 * CELL + BOX;
-  return mouseX >= ex && mouseX <= ex + es && mouseY >= ey && mouseY <= ey + es;
+// p5.js fires these on input. ?. (optional chaining) silently skips if the scene has no handler.
+function keyPressed()   { scene.handleKey?.(); }
+function mousePressed() { scene.handleClick?.(); }
+
+// goTo() transitions scenes: calls onExit on the old one, swaps, calls onEnter on the new one
+function goTo(s) {
+  scene?.onExit?.();
+  scene = s;
+  scene.onEnter?.();
 }
 
+
+// --- GOAL HOVER DETECTION ---
+// Returns the goal object the mouse is hovering near, or null.
+// Uses an expanded 3x3-cell hit area around each goal box so it's easier to hover.
+function getHoveredGoal(maxVisible) {
+  for (let i = 0; i < goals.length; i++) {
+    let g = goals[i];
+    if (g.boxIdx >= maxVisible) continue;
+    let goalCol = g.boxIdx % COLUMNS;// column = remainder after dividing by 52
+    let goalRow = floor(g.boxIdx / COLUMNS); // row = how many full years have passed
+
+    // expand the hit area one cell outward in every direction
+    let ex = GRID_X + (goalCol - 1) * CELL;
+    let ey = GRID_Y + (goalRow - 1) * CELL;
+    let es = 2 * CELL + BOX; // total size = 3 cells wide/tall
+
+    if (mouseX >= ex && mouseX <= ex + es && mouseY >= ey && mouseY <= ey + es) return g;
+  }
+  return null;
+}
+
+
+// --- DRAW GRID ---
+// CITATION: rect(), fill(), sin(), map() — https://p5js.org/reference/p5/rect/
 function drawGrid(count) {
   noStroke();
-  let goalIdx = weeksLived + 13;
-  let goalCol = goalIdx % COLUMNS;
-  let goalRow = floor(goalIdx / COLUMNS);
-  let goalX = GRID_X + goalCol * CELL;
-  let goalY = GRID_Y + goalRow * CELL;
-  let expanded = isGoalHovered(count);
+  let hoveredGoal = getHoveredGoal(count);
 
   for (let i = 0; i < count; i++) {
-    let col = i % COLUMNS;
-    let row = floor(i / COLUMNS);
+    let col = i % COLUMNS;// % gives the remainder — cycles 0–51 for each row of 52 weeks
+    let row = floor(i / COLUMNS); // floor() gives the whole-number year this week belongs to
     let x = GRID_X + col * CELL;
     let y = GRID_Y + row * CELL;
 
-    // skip the 3x3 area around the goal when expanded
-    if (expanded && abs(col - goalCol) <= 1 && abs(row - goalRow) <= 1) continue;
+    // skip the 3x3 area around the hovered goal — it gets drawn expanded after the loop
+    if (hoveredGoal) {
+      let hCol = hoveredGoal.boxIdx % COLUMNS;
+      let hRow = floor(hoveredGoal.boxIdx / COLUMNS);
+      if (abs(col - hCol) <= 1 && abs(row - hRow) <= 1) continue;
+      // abs() = absolute value; this checks if the box is within 1 step of the goal in any direction
+    }
+
+    // find if any goal's deadline lands on this box
+    let matchingGoal = null;
+    for (let gi = 0; gi < goals.length; gi++) {
+      if (goals[gi].boxIdx === i) { matchingGoal = goals[gi]; break; }
+    }
 
     if (i === weeksLived) {
+      // animate the current week: sin() produces a smooth wave between -1 and 1
+      // map() stretches that range into 100–255 alpha, creating a pulsing breathing effect
       let pulse = map(sin(frameCount * 0.12), -1, 1, 100, 255);
       fill(210, 50, 50, pulse);
-    } else if (i === goalIdx && userGoal !== '') {
-      fill(200, 165, 60);
+
+    } else if (matchingGoal) {
+      fill(matchingGoal.color); // pink / blue / green depending on goal duration
+
+    } else if (birthdayWeeks.has(i)) {
+      fill(i < weeksLived ? '#8FAAB8' : '#3A5566'); // past birthdays lighter, future darker
+
     } else if (i < weeksLived) {
-      fill(210, 210, 200);
+      fill('#D2D2C8');
+
     } else {
-      fill(32);
+      fill('#202020');
     }
+
     rect(x, y, BOX, BOX, 1.5);
   }
 
-  // draw expanded goal box on top
-  if (expanded) {
-    fill(200, 165, 60);
-    rect(goalX - CELL, goalY - CELL, 2 * CELL + BOX, 2 * CELL + BOX, 3);
+  // draw the expanded goal box on top of the grid when hovered
+  if (hoveredGoal) {
+    let hCol = hoveredGoal.boxIdx % COLUMNS;
+    let hRow = floor(hoveredGoal.boxIdx / COLUMNS);
+    let hx = GRID_X + hCol * CELL;
+    let hy = GRID_Y + hRow * CELL;
+    fill(hoveredGoal.color);
+    rect(hx - CELL, hy - CELL, 2 * CELL + BOX, 2 * CELL + BOX, 3);
   }
-}                                                                                                                                                                
-                                                          
-function computeWeeks(bd) {
-  birthDate = bd; // store globally so tooltip can compute per-box dates
-  let msPerWeek = 1000 * 60 * 60 * 24 * 7;
-  weeksLived    = floor((Date.now() - bd) / msPerWeek);
-  yearsLived     = floor(weeksLived / COLUMNS);
-  weeksRemaining = COLUMNS * ROWS - weeksLived;
-}                                                                                                                                                                
-                                                                                                                                                                 
-function formatDigits(d) { // insert slashes for display: "01151990" → "01/15/1990"
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return d.slice(0,2) + '/' + d.slice(2);
-  return d.slice(0,2) + '/' + d.slice(2,4) + '/' + d.slice(4);
 }
 
-function parseDate(str) { // turn "mm/dd/yyyy" into a real date, or null if it's bad                                                                             
-  let parts = str.split('/'); //splitting dates into parts                             
-  if (parts.length !== 3) return null; //null is basically just no date                                                                                                                           
-    let m = Number(parts[0]), d = Number(parts[1]), y = Number(parts[2]);                                                                                           
-  if (!m || !d || !y || y < 1900) return null; //if the date is invalid, return null
-    let date = new Date(y, m - 1, d);                                                                                                                              
-  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null; // catches things like feb 31                                  
-  return date;                                                                                                                                                   
-}                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                                         
-                                                                                                                                                                 
-// HOVER TOOLTIP
+
+// --- COMPUTE WEEKS ---
+function computeWeeks(bd) {
+  birthDate = bd;
+
+  let msPerWeek = 1000 * 60 * 60 * 24 * 7;
+  // milliseconds per week: 1000ms × 60s × 60min × 24hr × 7days = 604,800,000
+
+  weeksLived     = floor((Date.now() - bd) / msPerWeek);
+  // Date.now() = current time in ms. Subtracting birth gives elapsed ms. Dividing by msPerWeek = weeks.
+
+  yearsLived     = floor(weeksLived / COLUMNS);
+  weeksRemaining = COLUMNS * targetYears - weeksLived;
+
+  birthdayWeeks.clear();
+  for (let y = 1; y <= targetYears; y++) {
+    // create a Date for the birthday in each future year, keeping the same month and day
+    let bday = new Date(bd.getFullYear() + y, bd.getMonth(), bd.getDate());
+    let idx  = floor((bday - bd) / msPerWeek);
+    if (idx >= 0 && idx < COLUMNS * targetYears) birthdayWeeks.add(idx);
+  }
+}
+
+
+// --- DATE HELPERS ---
+// formatDigits() inserts slashes: "01151990" → "01/15/1990"
+function formatDigits(d) {
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return d.slice(0, 2) + '/' + d.slice(2);
+  return d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+}
+
+function parseDate(str) {
+  let parts = str.split('/');
+  if (parts.length !== 3) return null;
+
+  let m = Number(parts[0]), d = Number(parts[1]), y = Number(parts[2]);
+  if (!m || !d || !y || y < 1900) return null;
+
+  let date = new Date(y, m - 1, d); // JS months are 0-indexed, so subtract 1 from month
+
+  // re-check fields to catch invalid dates JS silently rolls over (e.g. Feb 31 → Mar 3)
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+
+  return date;
+}
+
+
+// --- TOOLTIP ---
+// CITATION: textWidth() — https://p5js.org/reference/p5/textWidth/
 function getHoveredBox() {
-  for (let i = 0; i < COLUMNS * ROWS; i++) {
+  for (let i = 0; i < COLUMNS * targetYears; i++) {
     let col = i % COLUMNS;
     let row = floor(i / COLUMNS);
     let x = GRID_X + col * CELL;
@@ -134,264 +221,593 @@ function getHoveredBox() {
 }
 
 function getBoxLabel(i) {
-  let age = floor(i / COLUMNS);
-  let boxDate = new Date(birthDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
-  let month = boxDate.getMonth();
-  let season = (month <= 1 || month === 11) ? 'winter'
-             : month <= 4 ? 'spring'
-             : month <= 7 ? 'summer' : 'fall';
-
-  // if this is the goal box, show the goal + how far away it is
-  if (i === weeksLived + 13 && userGoal !== '') {
-    let weeksAway = i - weeksLived; // weeks until the goal
-    let daysAway  = weeksAway * 7;  // same but in days
-    return `goal: "${userGoal}" · ${weeksAway} weks (${daysAway} days)`;
+  for (let gi = 0; gi < goals.length; gi++) {
+    if (goals[gi].boxIdx === i) {
+      return 'GOAL: "' + goals[gi].text.toUpperCase() + '" · ' + goals[gi].days + ' DAYS';
+    }
   }
+  let age     = floor(i / COLUMNS);
+  let boxDate = new Date(birthDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+  // birthDate.getTime() in ms + i weeks in ms gives the calendar date of this box
+  let month   = boxDate.getMonth(); // 0 = Jan, 11 = Dec
 
-  return `age ${age} · ${season} ${boxDate.getFullYear()}`;
+  let season = (month <= 1 || month === 11) ? 'winter'
+             : month <= 4                   ? 'spring'
+             : month <= 7                   ? 'summer'
+             :                               'fall';
+  // chained ternary operators map month numbers to season names
+
+  return 'AGE ' + age + ' · ' + season.toUpperCase() + ' ' + boxDate.getFullYear();
 }
 
 function drawTooltip(maxVisible) {
-  let i = getHoveredBox();
-  if (isGoalHovered(maxVisible)) i = weeksLived + 13;
+  let i  = getHoveredBox();
+  let hg = getHoveredGoal(maxVisible);
+  if (hg) i = hg.boxIdx;
+
   if (i !== lastHoveredBox) {
     lastHoveredBox = i;
     if (i >= 0 && i < maxVisible) tickSound.play();
+    // only play the tick sound when entering a new box, not every frame
   }
+
   if (i < 0 || i >= maxVisible) return;
+
   let label = getBoxLabel(i);
   textFont('Menlo');
-  textSize(10);
-  textAlign(LEFT, CENTER);
-  let tw = textWidth(label) + 16;
+  textSize(11);
+  textAlign(CENTER); //left, center
+
+  let tw = textWidth(label) + 16; // textWidth() measures pixel width of a string at the current font/size
   let th = 22;
   let tx = mouseX + 12;
   let ty = mouseY - 28;
-  if (tx + tw > width) tx = mouseX - tw - 12; // flip left if too close to edge
-  if (ty < GRID_Y) ty = mouseY + 10;             // flip down if too close to top
-  fill(15, 230);
-  stroke(55);
+
+  if (tx + tw > GRID_AREA_WIDTH) tx = mouseX - tw - 12; // flip left if it would go off the grid edge
+  if (ty < GRID_Y)               ty = mouseY + 10;       // flip down if it would go above the grid
+
+  fill('#0F0F0FE6'); // E6 in hex = 230/255 opacity — slightly transparent
+  stroke('#373737');
   strokeWeight(1);
   rect(tx, ty, tw, th, 4);
   noStroke();
-  fill(190);
+  fill('#BEBEBE');
   text(label, tx + 8, ty + th / 2);
 }
 
-//SCENES                                                                                                 
-const inputScene = { // This is the first screen the user sees, inputting BIRTHDAY                                                                                                            
-  digits: '', //                                                                                                                                                                                                            
-  onEnter() { this.digits = ''; }, // clear the input box when we arrive                                                                                                                                                            
-  draw() {                                                                                                                                                       
-    let bx = width / 2 - 135, by = height / 2, bw = 270, bh = 50;                                                                                                                                           
-    noStroke();                                                                                                                                                  
-    textAlign(CENTER, CENTER);                                                                                                                                   
-    textFont('Menlo');                                                                                                                                           
-    textSize(14);                                         
-    fill(255);
-    text('hi friend!', width / 2, height / 2 - 60);
-    fill(255);                                                                                                                                                   
-    text('when is your birthday?', width / 2, height / 2 - 20);                                                                                             
-                                                                                                                                                                 
-    // draw the input box                                                                                                                                        
-    fill("#282427"); 
-    stroke(50); 
-    strokeWeight(1);                
-    rect(bx, by, bw, bh, 999);                                                                                                                                    
-    noStroke();                                           
-    textSize(16);                                                                                                                                                
-    if (this.digits.length===0) { // showing a placeholder if nothing typed yet; this.digits is the inputted date                                                                               
-      fill("#E7E7E7");
-      text('mm/dd/yyyy', width / 2, by + bh / 2);                                                                                                             
-    } else {                                              
-      fill(255);
-      text(formatDigits(this.digits), width / 2, by + bh / 2);
-    }                                                                                                                                                                                                                  
-    textSize(11);                                                                                                                                                
-    fill(60);
-    text('press enter ↵ to continue', width/2, height /2 + 90);                                                                                                      
-  },                                                                                                                                                             
 
-  handleKey() {                                                                                                                                                  
-    if (keyCode === ENTER) { //submit the date           
-      let date = parseDate(formatDigits(this.digits));
-      if (!date || date > new Date()) return; //do nothing if the date is invalid                                                                               
-      computeWeeks(date);                                                                                                                                        
-      goTo(transitionScene);                                                                                                                                     
-    } else if (keyCode === BACKSPACE) {
-      this.digits = this.digits.slice(0, -1);
-    } else if (key >= '0' && key <= '9' && this.digits.length < 8) {
-      this.digits += key;
-    }                                                     
-  }                                                                                                                                                              
-};                                                        
+// --- LEGEND ---
+function drawLegend() {
+  let items = [
+    {col: color(210, 50, 50), label: 'NOW'},
+    {col: color('#D2D2C8'),label: 'LIVED'},
+    { col: color('#8FAAB8'),label: 'BIRTHDAY' },
+    { col: color('#E05080'),label: '30D'},
+    { col: color('#4A90D9'), label: '60D'},
+    { col: color('#50C878'),label: '90D'},
+  ];
 
-const transitionScene = { // screen 2: show how many years they've lived, fades in                                                                               
-  onEnter() { this.startTime = millis(); }, // record when we arrived
-            
-  //DRAW TRANSITION SCENE 
-  draw() {                                                
-    let elapsed = millis() - this.startTime;
-    let a;
-    if (elapsed < 600) {
-      a = (elapsed / 600) * 255;
-    } else {
-      a = 255;
-    } // constrain is                                                                                                                                                                                               
-    noStroke();                                                                                                                                                  
-    textAlign(CENTER, CENTER);                                                                                                                                   
-                                                          
-    textFont('Menlo');                                                                                                                                           
-    textSize(13);
-    fill(135, a);                                                                                                                                                
-    text('you made it through', width / 2, height / 2 - 34);
-                                                                                                                                                                 
-    textFont(canelaFont);
-    textSize(70);                                                                                                                                                
-    fill(255, a);                                         
-    text(yearsLived + ' years', width / 2, height / 2 + 22);
-                                                                                                                                                                 
-    if (elapsed > 2200) goTo(introBoxScene); // move on after 2.2 seconds                                                                                        
-  }                                                                                                                                                              
-};                                                                                                                                                               
-                                                          
-const introBoxScene = { // screen 3: show what one week looks like as a box                                                                                      
-  onEnter() { this.startTime = millis(); },
-                                                                                                                                                                 
-  draw() {                                                
-    let elapsed = millis() - this.startTime;                                                                                                                     
-    let a;
-    if (elapsed < 600) {
-      a = (elapsed / 600) * 255;
-    } else {
-      a = 255;
-    } // fade in
-                                                                                                                                                                 
+  let spacing = GRID_AREA_WIDTH / items.length; // divide 600px evenly among 6 items = 100px each
+  let y = 900;
+
+  noStroke();
+  textFont('Menlo');
+  textSize(9);
+  textAlign(CENTER, TOP);
+
+  for (let i = 0; i < items.length; i++) {
+    let cx = spacing * i + spacing / 2; // horizontal center of this legend item's zone
+    fill(items[i].col);
+    rect(cx - 4, y, 8, 8, 1.5);
+    fill('#555555');
+    text(items[i].label, cx, y + 13);
+  }
+}
+
+
+// =============================================================================
+// SCENES
+// Each scene is a plain JS object. goTo() calls onEnter/onExit on transitions.
+// draw() runs every frame; handleKey() and handleClick() run on input events.
+// =============================================================================
+
+
+// --- SCENE 1: INPUT ---
+const inputScene = {
+  digits: '',    // raw digits as the user types (e.g. "01151990")
+  btnRects: [],  // bounding rects for 60/80/100 buttons, used for click detection
+
+  onEnter() {
+    this.digits = '';
+    document.getElementById('bg-video').style.display = 'block';
+    document.getElementById('bg-overlay').style.display = 'block';
+  },
+  onExit() {
+    document.getElementById('bg-video').style.display = 'none';
+    document.getElementById('bg-overlay').style.display = 'none';
+  },
+
+  draw() {
+    clear(); // transparent canvas so the HTML background video shows through
+
+    let cx = width / 2;
+    let cy = height / 2 - 10;
+
+    textAlign(CENTER, CENTER);
+    textFont('Menlo');
     noStroke();
-    textAlign(CENTER, CENTER);                                                                                                                                   
-    textFont('Menlo');                                    
+
     textSize(13);
-    fill(135, a);
-    text('this box represents 1 week of your life...', width / 2, height / 2 - 70);
-                                                                                                                                                                 
-    //1 white box to represnet life lived                                                                                                                                                                                                                               
-    fill(215 , a);                                                                                                                                      
-    rect(width / 2 - 27, height / 2 - 22, 22, 22, 4);
-                                                                                                                                                                 
+    fill('#FFFFFF');
+    text('HI FRIEND!', cx, cy - 100);
+
+    fill('#878787');
+    text('WHEN IS YOUR BIRTHDAY?', cx, cy - 68);
+
+    let bw = 270, bh = 50;
+    let bx = cx - bw / 2, by = cy - 42;
+    fill('#FFFFFF');
+    noStroke();
+    rect(bx, by, bw, bh, 999); // corner radius 999 makes it a pill shape
+
+    textSize(16);
+    if (this.digits.length === 0) {
+      fill('#AAAAAA');
+      text('MM/DD/YYYY', cx, by + bh / 2);
+    } else {
+      fill('#000000');
+      text(formatDigits(this.digits), cx, by + bh / 2);
+    }
+
+    textSize(12);
+    fill('#878787');
+    text('HOW LONG DO YOU PLAN TO LIVE?', cx, cy + 42);
+
+    let options = [60, 80, 100];
+    let btnW = 66, btnH = 32, gap = 16;
+    let totalW = options.length * btnW + (options.length - 1) * gap;
+    let startX = cx - totalW / 2; // center the button row horizontally
+    let btnY   = cy + 62;
+    this.btnRects = [];
+
+    for (let i = 0; i < options.length; i++) {
+      let bx2 = startX + i * (btnW + gap);
+      this.btnRects.push({ x: bx2, y: btnY, w: btnW, h: btnH, val: options[i] });
+
+      if (options[i] === targetYears) {
+        fill('#FFFFFF'); stroke('#FFFFFF');
+      } else {
+        fill('#282427'); stroke('#555555');
+      }
+      strokeWeight(1);
+      rect(bx2, btnY, btnW, btnH, 6);
+      noStroke();
+      fill(options[i] === targetYears ? '#000000' : '#999999');
+      // ternary: condition ? valueIfTrue : valueIfFalse
+      textSize(13);
+      text('' + options[i], bx2 + btnW / 2, btnY + btnH / 2);
+    }
+
+    textSize(11);
+    fill('#AAAAAA');
+    text('PRESS ENTER ↵ TO CONTINUE', cx, cy + 128);
+  },
+
+  handleKey() {
+    if (keyCode === ENTER) {
+      let date = parseDate(formatDigits(this.digits));
+      if (!date || date > new Date()) return; // reject invalid or future dates
+
+      computeWeeks(date);
+      goals = [];
+      goTo(transitionScene);
+
+    } else if (keyCode === BACKSPACE) {
+      this.digits = this.digits.slice(0, -1); // slice(0, -1) removes the last character
+
+    } else if (key >= '0' && key <= '9' && this.digits.length < 8) {
+      this.digits += key; // max 8 digits = mmddyyyy
+    }
+  },
+
+  handleClick() {
+    for (let b of this.btnRects) {
+      if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) {
+        targetYears = b.val;
+      }
+    }
+  }
+};
+
+
+// --- SCENE 2: TRANSITION ---
+const transitionScene = {
+  onEnter() { this.startTime = millis(); },
+
+  draw() {
+    let elapsed = millis() - this.startTime;
+
+    // fade in: ramps alpha from 0→255 over the first 600ms, then stays at 255
+    let a = elapsed < 600 ? (elapsed / 600) * 255 : 255;
+
+    noStroke();
+    textAlign(CENTER, CENTER);
+
+    textFont('Menlo');
+    textSize(13);
+    fill(255, a);
+    text('YOU MADE IT THROUGH', GRID_CX, height / 2 - 34);
+
+    textFont(canelaFont);
+    textSize(70);
+    fill(255, a);
+    text(yearsLived + ' YEARS', GRID_CX, height / 2 + 22);
+
+    if (elapsed > 2200) goTo(introBoxScene);
+  }
+};
+
+
+// --- SCENE 3: INTRO BOX ---
+const introBoxScene = {
+  onEnter() { this.startTime = millis(); },
+
+  draw() {
+    let elapsed = millis() - this.startTime;
+    let a = elapsed < 600 ? (elapsed / 600) * 255 : 255;
+
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textFont('Menlo');
+    textSize(13);
+    fill(255, a);
+    text('THIS BOX REPRESENTS 1 WEEK OF YOUR LIFE...', GRID_CX, height / 2 - 70);
+
+    // blink: floor(elapsed/400) increments every 400ms; %2 alternates 0 and 1 → on/off
+    if (elapsed > 2400 || floor(elapsed / 400) % 2 === 0) {
+      fill(215);
+      rect(GRID_CX - 11, height / 2 - 22, 22, 22, 4);
+    }
+
     if (elapsed > 5000) goTo(gridLivedScene);
   }
 };
-                             
-//SCREEN 4: Animate the part of filling in all the weeks you've lived
-const gridLivedScene = { 
-  onEnter() {
-    this.progress = 0; // start drawing from box 0                                                                                                            
-    this.doneTime = null; // idk when animation
-  },                                                                                                                                                             
-                                                          
-  draw() {
-    if (this.progress < weeksLived + 1) { // keep going until all lived weeks are drawn
-      this.progress += 12; // draw 12 more boxes per frame (controls animation speed)                                                                            
-      if (this.progress >= weeksLived + 1) this.doneTime = millis(); // note when we finished
-    }                                                                                                                                                            
-                                                          
-    noStroke();                                                                                                                                                  
-    textAlign(CENTER, TOP);                               
 
+
+// --- SCENE 4: GRID LIVED ---
+const gridLivedScene = {
+  onEnter() {
+    this.progress = 0;
+    this.doneTime = null;
+  },
+
+  draw() {
+    if (this.progress < weeksLived + 1) {
+      this.progress += 12; // reveal 12 more boxes per frame (~720/sec at 60fps)
+      if (this.progress >= weeksLived + 1) this.doneTime = millis();
+    }
+
+    noStroke();
+    textAlign(CENTER, TOP);
     textFont('Menlo');
     textSize(12);
-    fill(135);
-    text('you have lived ' + yearsLived + ' years', width / 2, 24);                                                                                           
-    
-    textFont('Menlo');                                                                                                                                    
-    textSize(28);                                         
-    fill(255);                                                                                                                                                   
-    text("that's " + weeksLived.toLocaleString() + ' weeks', width / 2, 50);
-                                                                                                                                                                 
+    fill('#FFFFFF');
+    text('YOU HAVE LIVED ' + yearsLived + ' YEARS', GRID_CX, 24);
+    textSize(28);
+    fill('#FFFFFF');
+    text("THAT'S " + weeksLived.toLocaleString() + ' WEEKS', GRID_CX, 50);
+    // .toLocaleString() adds commas to large numbers (e.g. 1300 → "1,300")
+
     drawGrid(floor(this.progress));
     drawTooltip(floor(this.progress));
+    drawLegend();
 
     if (this.doneTime !== null && millis() - this.doneTime > 5000) goTo(goalScene);
   }
-};                                                                                                                                                               
-                                                          
-// SCREEN 5: ask the user what they want to acomplish in the next 3 months
+};
+
+
+// --- SCENE 5: GOAL INPUT ---
 const goalScene = {
   text: '',
-  onEnter() { this.text = ''; }, // reset when we arrive
+  btnRects: [],
+
+  onEnter() {
+    this.text     = '';
+    this.btnRects = [];
+    fetchDone     = false;
+  },
 
   draw() {
-    let bx = width / 2 - 175, by = height / 2, bw = 350, bh = 50;
+    let cx = GRID_CX;
+    let bx = cx - 175, by = height / 2 + 20, bw = 350, bh = 50;
+
     noStroke();
     textAlign(CENTER, CENTER);
     textFont('Menlo');
     textSize(14);
-    fill(255);
-    text('what do you want to accomplish', width / 2, height / 2 - 60);
-    text('in the next 3 months?', width / 2, height / 2 - 36);
+    fill('#FFFFFF');
+    text('WHAT DO YOU WANT TO ACCOMPLISH?', cx, height / 2 - 90);
 
-    // draw the input box (same style as birthday input)
+    textSize(12);
+    fill('#878787');
+    text('HOW MANY DAYS FROM NOW?', cx, height / 2 - 58);
+
+    let options = [30, 60, 90];
+    let btnW = 66, btnH = 32, gap = 16;
+    let totalW = options.length * btnW + (options.length - 1) * gap;
+    let startX = cx - totalW / 2;
+    let btnY   = height / 2 - 38;
+    this.btnRects = [];
+
+    for (let i = 0; i < options.length; i++) {
+      let bx2      = startX + i * (btnW + gap);
+      let btnColor = getGoalColor(options[i]); // each button is colored by its duration
+
+      this.btnRects.push({ x: bx2, y: btnY, w: btnW, h: btnH, val: options[i] });
+
+      if (options[i] === goalDays) {
+        fill(btnColor); stroke(btnColor);
+      } else {
+        fill('#282427'); stroke('#555555');
+      }
+      strokeWeight(1);
+      rect(bx2, btnY, btnW, btnH, 6);
+      noStroke();
+      fill(options[i] === goalDays ? '#000000' : '#999999');
+      textSize(13);
+      text('' + options[i], bx2 + btnW / 2, btnY + btnH / 2);
+    }
+
     fill('#282427');
-    stroke(50);
+    stroke('#323232');
     strokeWeight(1);
     rect(bx, by, bw, bh, 999);
     noStroke();
     textSize(14);
-    if (this.text.length === 0) { // placeholder if nothings been typed yet
+    if (this.text.length === 0) {
       fill('#E7E7E7');
-      text('type your goal...', width / 2, by + bh / 2);
+      text('TYPE YOUR GOAL...', cx, by + bh / 2);
     } else {
-      fill(255);
-      text(this.text, width / 2, by + bh / 2);
+      fill('#FFFFFF');
+      text(this.text, cx, by + bh / 2);
     }
+
     textSize(11);
-    fill(60);
-    text('press enter ↵ to continue', width / 2, height / 2 + 90);
+    fill('#3C3C3C');
+    text('PRESS ENTER ↵ TO CONTINUE', cx, height / 2 + 110);
   },
 
   handleKey() {
-    if (keyCode === ENTER && this.text.length > 0) { // only continue if somthing was typed
-      userGoal = this.text;
-      goTo(gridFullScene);
+    if (keyCode === ENTER && this.text.length > 0) {
+      pendingGoal = {
+        text:   this.text,
+        days:   goalDays,
+        color:  getGoalColor(goalDays),
+        boxIdx: weeksLived + Math.round(goalDays / 7)
+        // Math.round(goalDays / 7) converts days to the nearest week count
+        // adding weeksLived makes it an absolute position on the grid (not relative to today)
+      };
+      pendingRecs = [];
+      fetchDone   = false;
+      fetchRecommendations(this.text, goalDays);
+      goTo(loadingScene);
+
     } else if (keyCode === BACKSPACE) {
-      this.text = this.text.slice(0, -1); // delete last character
-    } else if (key.length === 1 && this.text.length < 60) { // any key, max 60 chars
+      this.text = this.text.slice(0, -1);
+
+    } else if (key.length === 1 && this.text.length < 60) {
+      // key.length === 1 filters out special keys like arrows and ctrl (those have longer names)
       this.text += key;
+    }
+  },
+
+  handleClick() {
+    for (let b of this.btnRects) {
+      if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) {
+        goalDays = b.val;
+      }
     }
   }
 };
 
-const gridFullScene = { // screen 5: reveal the rest of the grid (weeks remaining)                                                                               
-  onEnter() {
-    this.startTime    = millis();                                                                                                                                
-    this.totalVisible = weeksLived + 1; // start from where the last scene left off
-  },                                                                                                                                                             
 
-  draw() {                                                                                                                                                       
-    let elapsed = millis() - this.startTime;              
-    let a;
-    if (elapsed < 600) {
-      a = (elapsed / 600) * 255;
-    } else {
-      a = 255;
-    } // fade in the text
-                                                                                                                                                                 
-    if (this.totalVisible < COLUMNS * ROWS) this.totalVisible += 3; // reveal 3 more boxes per frame
-                                                                                                                                                                 
-    noStroke();                                           
-    textAlign(CENTER, TOP);
+// --- API CALL ---
+// CITATION: fetch() API — https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
+// CITATION: async/await — https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Asynchronous/Promises
+// `async` lets this function run in the background without blocking the p5.js draw loop
+async function fetchRecommendations(goal, days) {
+  try {
+    const res = await fetch('/api/recommendations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal, days }) // JSON.stringify converts the JS object to a JSON string for the request
+    });
+    const data = await res.json(); // parse the server's JSON response into a JS object
+    pendingRecs = data.recommendations || []; // || [] fallback in case the field is missing
+  } catch (e) {
+    pendingRecs = [];
+  }
+  fetchDone = true;
+}
 
-    textFont('Menlo');                                                                                                                                           
-    textSize(12);
-    fill(135, a);                                                                                                                                                
-    text('if you live until 80, you have', width / 2, 24);
 
+// --- SCENE 6: LOADING ---
+const loadingScene = {
+  onEnter() { this.lastTick = millis(); this.dots = 0; },
+
+  draw() {
+    if (millis() - this.lastTick > 400) {
+      this.dots = (this.dots + 1) % 4; // % 4 cycles 0→1→2→3→0, creating the animated dots
+      this.lastTick = millis();
+    }
+
+    noStroke();
+    textAlign(CENTER, CENTER);
     textFont('Menlo');
+    textSize(13);
+    fill('#878787');
+    text('THINKING' + '.'.repeat(this.dots), GRID_CX, height / 2);
+    // '.'.repeat(n) creates a string of n dots: 0="", 1=".", 2="..", 3="..."
+
+    if (fetchDone) {
+      let completedGoal = {
+        text:   pendingGoal.text,
+        days:   pendingGoal.days,
+        color:  pendingGoal.color,
+        boxIdx: pendingGoal.boxIdx,
+        recs:   pendingRecs
+      };
+      goals.push(completedGoal);
+      pendingGoal = null;
+      goTo(gridFullScene);
+    }
+  }
+};
+
+
+// --- SCENE 7: FULL GRID + SIDEBAR ---
+const gridFullScene = {
+  onEnter() {
+    this.startTime    = millis();
+    this.totalVisible = weeksLived + 1;
+    this.closeRects   = []; // stores × button positions each frame for click detection
+  },
+
+  draw() {
+    let elapsed = millis() - this.startTime;
+    let a = elapsed < 600 ? (elapsed / 600) * 255 : 255; // fade in over 600ms
+
+    if (this.totalVisible < COLUMNS * targetYears) this.totalVisible += 3; // slowly sweep the full grid
+
+    noStroke();
+    textAlign(CENTER, TOP);
+    textFont('Menlo');
+    textSize(12);
+    fill(255, a);
+    text('IF YOU LIVE UNTIL ' + targetYears + ', YOU HAVE', GRID_CX, 24);
     textSize(28);
-    fill(255, a);                                                                                                                                                
-    text(weeksRemaining.toLocaleString() + ' weeks left', width / 2, 50);
-                                                                                                                                                                 
+    fill(255, a);
+    text(weeksRemaining.toLocaleString() + ' WEEKS LEFT', GRID_CX, 50);
+
     drawGrid(floor(this.totalVisible));
     drawTooltip(floor(this.totalVisible));
+    drawLegend();
+    this.drawSidebar();
+  },
+
+  drawSidebar() {
+    stroke('#252525');
+    strokeWeight(1);
+    line(608, GRID_Y, 608, 885); // vertical divider between grid and sidebar
+    noStroke();
+
+    textFont('Menlo');
+    textSize(11);
+    fill('#AAAAAA');
+    textAlign(LEFT, TOP);
+    text('GOALS', 618, 92);
+
+    // "+ ADD GOAL" white pill button — position hardcoded, click zone matched in handleClick()
+    fill('#FFFFFF');
+    noStroke();
+    rect(702, 88, 84, 22, 999);
+    fill('#000000');
+    textSize(9);
+    textAlign(CENTER, CENTER);
+    text('+ ADD GOAL', 744, 99); // 744 = 702 + 84/2 (horizontal center), 99 = 88 + 22/2 (vertical center)
+    stroke('#252525');
+    strokeWeight(1);
+    line(618, 118, 786, 118); // horizontal divider under the header
+    noStroke();
+
+    this.closeRects = [];
+    let y = 128; // y cursor: starts at top of first goal card
+
+    for (let gi = 0; gi < goals.length; gi++) {
+      let g = goals[gi];
+
+      fill(g.color);
+      ellipse(625, y + 7, 8, 8); // colored dot for this goal
+
+      // goal title — p5.js wraps text automatically when you pass a width to text()
+      fill('#FFFFFF');
+      textFont('Menlo');
+      textSize(10);
+      textAlign(LEFT, TOP);
+      text(g.text.toUpperCase(), 636, y, 132);
+      // text(str, x, y, w) — the 4th argument tells p5 to word-wrap at 132px wide
+
+      fill('#555555');
+      textSize(12);
+      textAlign(RIGHT, TOP);
+      text('×', 786, y);
+      this.closeRects.push({ x: 772, y: y - 2, w: 16, h: 16, idx: gi });
+
+      fill('#555555');
+      textSize(9);
+      textAlign(LEFT, TOP);
+      text(g.days + 'D · ' + g.days + 'D LEFT', 636, y + 26);
+
+      // 3 action steps — also wrapped automatically using p5's 4-arg text()
+      for (let ri = 0; ri < g.recs.length; ri++) {
+        fill('#717171');
+        textSize(9);
+        textAlign(LEFT, TOP);
+        text('› ' + g.recs[ri], 618, y + 42 + ri * 30, 168);
+        // each bullet gets 30px of vertical space; wraps within the full 168px sidebar width
+      }
+
+      y += 140; // advance y cursor 140px for the next goal card (taller to fit wrapped text)
+
+      if (gi < goals.length - 1) {
+        stroke('#252525');
+        strokeWeight(1);
+        line(618, y - 6, 786, y - 6); // divider between goal cards
+        noStroke();
+      }
+    }
+
+    if (goals.length === 0) {
+      fill('#333333');
+      textFont('Menlo');
+      textSize(9);
+      textAlign(LEFT, TOP);
+      text('NO GOALS YET.', 618, 140);
+      text('CLICK + ADD GOAL', 618, 154);
+      text('TO GET STARTED.', 618, 168);
+    }
+
+    if (goals.length > 0) {
+      fill('#3A3A3A');
+      textFont('Menlo');
+      textSize(9);
+      textAlign(RIGHT, TOP);
+      text('CLEAR ALL', 786, 878);
+    }
+  },
+
+  handleClick() {
+    // "+ ADD GOAL" button: x=702 to 786, y=88 to 110
+    if (mouseX >= 702 && mouseX <= 786 && mouseY >= 88 && mouseY <= 110) {
+      goTo(goalScene);
+      return;
+    }
+
+    // × buttons — closeRects stores positions set each frame in drawSidebar()
+    for (let i = 0; i < this.closeRects.length; i++) {
+      let btn = this.closeRects[i];
+      if (mouseX >= btn.x && mouseX <= btn.x + btn.w &&
+          mouseY >= btn.y && mouseY <= btn.y + btn.h) {
+        goals.splice(btn.idx, 1); // splice(index, 1) removes one element from the array
+        return;
+      }
+    }
   }
-};       
+};
+
+// CITATIONS:
+// p5.js library (general) https://p5js.org/reference/
+// Your Life in Weeks by Bryan Braun https://www.bryanbraun.com/2020/12/27/your-life-in-weeks/ 
+// Anthropic Claude API — AI daily action recommendations https://docs.anthropic.com/
+
