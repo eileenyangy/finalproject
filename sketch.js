@@ -10,7 +10,7 @@ const CELL = 10; // each grid cell is 10x10px (box + gap)
 const BOX  = 8;  // visible box is 8x8px; the 2px gap comes from CELL - BOX
 
 // CITATION: Math.floor() — https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/floor
-const GRID_X = Math.floor((600 - COLUMNS * CELL) / 2);
+const GRID_X = Math.floor((600 - COLUMNS * CELL) / 2); //floor rounds down to nearest whole number. math.floor means we're rounding down from result of (600 - 52*10) which calculate s remaining space after accounting for da grid width 
 // (600 - 52*10) / 2 = 40px left margin, centering the 520px-wide grid in the 600px grid area
 
 const GRID_Y = 90;
@@ -36,12 +36,13 @@ let birthDate;
 let weeksLived, yearsLived, weeksRemaining;
 let birthdayWeeks = new Set();
 //set is used here because .has(i) checks membership in constant time, unlike looping through an array
+//unlike an array which would need to loop through every element to match - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set
 
 let lastHoveredBox = -1;
 
 let goals= []; // array of { text, days, color, recs, boxIdx }
 let pendingGoal = null; // goal being processed during the loading screen
-let pendingRecs = [];
+let pendingRecs = []; //array of the 3 daily action step recommendations we get back from the server/ API call based off users inputted goal/duration
 let goalDays= 90;
 let fetchDone= false;
 
@@ -52,7 +53,6 @@ function preload() {
   canelaFont = loadFont('data/CanelaText-Light-Trial.otf');
   tickSound= loadSound('data/tick.mp3');
 }
-
 
 // --- SETUP ---
 // Canvas is 800x930: 600px grid area + 200px sidebar
@@ -171,14 +171,19 @@ function computeWeeks(bd) {
   // Date.now() = current time in ms. Subtracting birth gives elapsed ms. Dividing by msPerWeek = weeks.
 
   yearsLived     = floor(weeksLived / COLUMNS);
+  // dividing total weeks by 52 (COLUMNS) gives us full years lived -- floor drops the partial year
   weeksRemaining = COLUMNS * targetYears - weeksLived;
+  // total weeks in a lifetime (52 * 80 = 4160) minus weeks already lived = weeks left !!
 
   birthdayWeeks.clear();
+  // reset the set before recalculating so we dont stack up duplicates from a prev session
   for (let y = 1; y <= targetYears; y++) {
     // create a Date for the birthday in each future year, keeping the same month and day
     let bday = new Date(bd.getFullYear() + y, bd.getMonth(), bd.getDate());
     let idx  = floor((bday - bd) / msPerWeek);
+    // same math as above -- how many weeks from birth to this specific bday
     if (idx >= 0 && idx < COLUMNS * targetYears) birthdayWeeks.add(idx);
+    // only add it if its a valid box within the grid range (0 to 4160)
   }
 }
 
@@ -256,7 +261,7 @@ function drawTooltip(maxVisible) {
   let label = getBoxLabel(i);
   textFont('Menlo');
   textSize(10);
-  textAlign(LEFT, CENTER);
+  textAlign(CENTER); //left, center
 
   let tw = textWidth(label) + 16; // textWidth() measures pixel width of a string at the current font/size
   let th = 22;
@@ -266,7 +271,7 @@ function drawTooltip(maxVisible) {
   if (tx + tw > GRID_AREA_WIDTH) tx = mouseX - tw - 12; // flip left if it would go off the grid edge
   if (ty < GRID_Y)               ty = mouseY + 10;       // flip down if it would go above the grid
 
-  fill('#0F0F0F');
+  fill('#0F0F0FE6'); 
   stroke('#373737');
   strokeWeight(1);
   rect(tx, ty, tw, th, 4);
@@ -454,7 +459,7 @@ const introBoxScene = {
   onEnter() { this.startTime = millis(); }, //when entering IntroBoxScene, we record current time in ms to use as reference point
   draw() {
     let elapsed = millis() - this.startTime; //this.startTime is the time when we entered the scene, so subtracting it from the current time gives us how long we've been in this scene. we use this elapsed time to ctrl timing of the fade-in and blinking effects
-    let a = min(255, (elapsed / 600) * 255); 
+    let a = min(255, (elapsed / 600) * 255);  //fade in alpha from 0 to 255 over 600ms, then cap at 255 with min() to prevent it fom going higher
 
     noStroke();
     textAlign(CENTER, CENTER);
@@ -464,7 +469,7 @@ const introBoxScene = {
     text('THIS BOX REPRESENTS 1 WEEK OF YOUR LIFE...', GRID_CX, height / 2 - 70);
 
     // blink: floor(elapsed/400) increments every 400ms; %2 alternates 0 and 1 → on/off
-    if (elapsed > 2400 || floor(elapsed / 400) % 2 === 0) { //
+    if (elapsed > 2300 || floor(elapsed / 400) % 2 === 0) { //if in scene for >2400 sec, keep box on or blink every 400ms
       fill(215);
       rect(GRID_CX - 11, height / 2 - 22, 22, 22, 4);
     }
@@ -590,8 +595,8 @@ const goalScene = {
       };
       pendingRecs = [];
       fetchDone   = false;
-      fetchRecommendations(this.text, goalDays);
-      goTo(gridFullScene);
+      fetchRecommendations(this.text, goalDays); //starts the API call to get 3 daily action steps a user can take to achieve their goal based on goal/context/duration!!
+      goTo(loadingScene);
 
     } else if (keyCode === BACKSPACE) {
       this.text = this.text.slice(0, -1);
@@ -612,26 +617,63 @@ const goalScene = {
 };
 
 
-// --- API CALL ---
+// ========================= API CALL =========================
+// CITATION: Google docs - I used AI to help me do an API call and give 3 daily action recommendations to the user based off their goals
 // CITATION: fetch() API — https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
 // CITATION: async/await — https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Asynchronous/Promises
 // `async` lets this function run in the background without blocking the p5.js draw loop
-async function fetchRecommendations(goal, days) {
-  try {
+async function fetchRecommendations(goal, days) { //(i used AI to help me create this function. it makes a POST request to the server with the user's goal and duration, 
+// then waits for the response and updates the pendingRecs variable with the recs from the server.  
+// allows us to fetch data without freezing the UI. a post request is a type of http request used to send data to a server. here, we are sending user goals/duration to the server so it can 
+// generate personalized recommendations based on that info. the server processes the request and sends back a response, which we handle in the code below to update the app with the new recs)
+  
+try { //try means: attempt the code inside try and if something errors, jump to catch to handle i
     const res = await fetch('/api/recommendations', {
-      method: 'POST',
+      method: 'POST', //// POST sends data to the server (vs GET which only retrieves)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ goal, days }) // JSON.stringify converts the JS object to a JSON string for the request
     });
     const data = await res.json(); // parse the server's JSON response into a JS object
     pendingRecs = data.recommendations || []; // || [] fallback in case the field is missing
-  } catch (e) {
-    pendingRecs = [];
+  } catch (e) { //catch means if an error occurs in the try block , run this code to handle. 
+    pendingRecs = []; 
   }
   fetchDone = true;
 }
 
 
+// --- SCENE 6: LOADING   ---
+const loadingScene = {
+  onEnter() { this.lastTick = millis(); this.dots = 0; },
+
+  draw() {
+    if (millis() - this.lastTick > 400) {
+      this.dots = (this.dots + 1) % 4; // % 4 cycles 0→1→2→3→0, creating the animated dots
+      this.lastTick = millis();
+    }
+
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textFont('Menlo');
+    textSize(13);
+    fill('#878787');
+    text('THINKING' + '.'.repeat(this.dots), GRID_CX, height / 2);
+    // '.'.repeat(n) creates a string of n dots: 0="", 1=".", 2="..", 3="..."
+
+    if (fetchDone) {
+      let completedGoal = {
+        text:   pendingGoal.text,
+        days:   pendingGoal.days,
+        color:  pendingGoal.color,
+        boxIdx: pendingGoal.boxIdx,
+        recs:   pendingRecs
+      };
+      goals.push(completedGoal);
+      pendingGoal = null;
+      goTo(gridFullScene);
+    }
+  }
+};
 
 
 // --- SCENE 7: FULL GRID + SIDEBAR ---
@@ -660,11 +702,14 @@ const gridFullScene = {
 
     // when the API call finishes in the background, add the goal to the list
     if (fetchDone && pendingGoal !== null) {
-      goals.push({ text: pendingGoal.text, days: pendingGoal.days, color: pendingGoal.color, boxIdx: pendingGoal.boxIdx, recs: pendingRecs });
+      goals.push({text: pendingGoal.text, days: pendingGoal.days, color: pendingGoal.color, boxIdx: pendingGoal.boxIdx, recs: pendingRecs }); //this is an array of goal objects, w text/days/color/boxIdx/recs properties that we push a new goal into when the API call finishes. we are taking data from pendingGoal and pendingRecs to create a new goal object and add it to the goals array, which is what the rest of the app uses to display goals on the grid/sidebar
       pendingGoal = null;
+      // Reference: Used AI to help me understand how to use Array.push to add the new goal: 
+      // Array.push() — https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/push
+      // push() adds a new object to the END of the goals array
     }
 
-    drawGrid(floor(this.totalVisible));
+    drawGrid(floor(this.totalVisible)); 
     drawTooltip(floor(this.totalVisible));
     drawLegend();
     this.drawSidebar();
@@ -742,7 +787,7 @@ const gridFullScene = {
       }
     }
 
-    if (goals.length === 0) {
+    if (goals.length === 0) { //if there are no goals, show instructions in the sidebar
       fill('#333333');
       textFont('Menlo');
       textSize(9);
@@ -752,7 +797,7 @@ const gridFullScene = {
       text('TO GET STARTED.', 618, 168);
     }
 
-    if (goals.length > 0) {
+    if (goals.length > 0) { // show "clear all" to delete goals
       fill('#3A3A3A');
       textFont('Menlo');
       textSize(9);
@@ -769,10 +814,10 @@ const gridFullScene = {
     }
 
     // × buttons — closeRects stores positions set each frame in drawSidebar()
-    for (let i = 0; i < this.closeRects.length; i++) {
-      let btn = this.closeRects[i];
-      if (mouseX >= btn.x && mouseX <= btn.x + btn.w &&
-          mouseY >= btn.y && mouseY <= btn.y + btn.h) {
+    //// Ref: Canvas button + manual hit detection pattern: https://www.khanacademy.org/computing/computer-programming/programming-games-visualizations/programming-buttons/a/a-button-function
+    for (let i = 0; i < this.closeRects.length; i++) { //for if click is within any of closeButtons, remove goal from goals array
+      let btn = this.closeRects[i]; //defining btn as the current closeRect we are checking in the loop. each closeRect has x,y,w,h that define the clickable area for that goal's × button, and idx which tells us which goal in the goals array this button corresponds
+      if (mouseX >= btn.x && mouseX <= btn.x + btn.w && mouseY >= btn.y && mouseY <= btn.y + btn.h) {
         goals.splice(btn.idx, 1); // splice(index, 1) removes one element from the array
         return;
       }
@@ -781,7 +826,4 @@ const gridFullScene = {
 };
 
 // CITATIONS:
-// p5.js library (general) https://p5js.org/reference/
-// Your Life in Weeks by Bryan Braun https://www.bryanbraun.com/2020/12/27/your-life-in-weeks/ 
-// Anthropic Claude API — AI daily action recommendations https://docs.anthropic.com/
-
+// docs.google.com/
