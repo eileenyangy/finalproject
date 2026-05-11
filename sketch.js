@@ -1,8 +1,7 @@
 //TIME IS FINITE INTERACTIVE NARRATIVE! CREATIVE CODING FINAL PROJECT :D - EILEEN YANG
 // goal: make people feel the urgency of their time and motivate goal-setting
 
-// --- CONSTANTS ---
-
+// ============== CONSTANTS ==============
 const COLUMNS = 52; // 52 weeks in a year = 52 columns in the grid
 let targetYears = 80; // default lifespan; user can change to 60 or 100
 
@@ -19,15 +18,15 @@ const GRID_CX = 300; // horizontal center of the grid area
 const SIDEBAR_X = 620; // where the sidebar starts (right of the grid)
 const SIDEBAR_W = 170; // sidebar width in pixels
 
-// Goal colors by duration — pink = urgent (30D), blue = medium (60D), green = long (90D)
-function getGoalColor(days) {
+//oal colors by duration — pink = 30D, blue is 60D, green 90D
+function getGoalColor(days) { //assigns specific colors to duration of goal to help user visualize
   if (days === 30) return '#E05080';
   if (days === 60) return '#4A90D9';
   return '#50C878';
 }
 
 
-// --- GLOBAL VARIABLES ---
+// ============== GLOBAL VARIABLES ==============
 
 let canelaFont;
 let tickSound;
@@ -47,14 +46,14 @@ let goalDays= 90;
 let fetchDone= false;
 
 
-// --- PRELOAD ---
+// ============== PRELOAD ==============
 // CITATION: loadFont(), loadSound() — https://p5js.org/reference/p5/loadFont/
 function preload() {
   canelaFont = loadFont('data/CanelaText-Light-Trial.otf');
   tickSound= loadSound('data/tick.mp3');
 }
 
-// --- SETUP ---
+// ============== SETUP ==============
 // Canvas is 800x930: 600px grid area + 200px sidebar
 function setup() {
   createCanvas(800, 930);
@@ -79,7 +78,7 @@ function goTo(s) {
 }
 
 
-// --- GOAL HOVER DETECTION ---
+// ============== GOAL HOVER DETECTION============
 // Returns the goal object the mouse is hovering near, or null.
 // Uses an expanded 3x3-cell hit area around each goal box so it's easier to hover.
 function getHoveredGoal(maxVisible) {
@@ -100,7 +99,7 @@ function getHoveredGoal(maxVisible) {
 }
 
 
-// --- DRAW GRID ---
+// ============== DRAW GRID ==============
 // CITATION: rect(), fill(), sin(), map() — https://p5js.org/reference/p5/rect/
 function drawGrid(count) {
   noStroke();
@@ -184,7 +183,7 @@ function computeWeeks(bd) {
 }
 
 
-// --- DATE HELPERS ---
+// ============== DATE HELPERS ==============
 // formatDigits() inserts slashes: "01151990" → "01/15/1990"
 function formatDigits(d) {
   if (d.length <= 2) return d;
@@ -208,7 +207,7 @@ function parseDate(str) {
 }
 
 
-// --- TOOLTIP ---
+// ============== TOOLTIP ==============
 // CITATION: textWidth() — https://p5js.org/reference/p5/textWidth/
 function getHoveredBox() {
   for (let i = 0; i < COLUMNS * targetYears; i++) {
@@ -232,18 +231,17 @@ function getBoxLabel(i) {
   // birthDate.getTime() in ms + i weeks in ms gives the calendar date of this box
   let month= boxDate.getMonth(); // 0 = Jan, 11 = Dec
   let season;
-  if (month <= 1||month === 11) {
+  if (month <= 1||month === 11) { //if month is Jan(0), Feb(1), or Dec(11), we consider it winter
     season = 'winter';
-  } else if(month <= 4) {
+  } else if(month <= 4) { //if month is mar apr or may it is spring
     season = 'spring';
-  } else if (month <= 7) {
+  } else if (month <= 7) { 
     season='summer';
-  } else {
-    season ='fall';
+  } else { //fall is aug/sep/oct
+    season ='fall'; 
   }
-  //ref: AI 
-
-  return 'AGE ' + age + ' · ' + season.toUpperCase() + ' ' + boxDate.getFullYear();
+  //ref: AI help - how to determine season from month in JS 
+  return 'AGE ' + age + ' · ' + season.toUpperCase() + ' ' + boxDate.getFullYear(); //label format: "AGE 29 · SPRING 2025" - we calculate the season based on the month of the box's date, and include the year for extra context
 }
 
 function drawTooltip(maxVisible) {
@@ -827,5 +825,4 @@ const gridFullScene = {
   }
 };
 
-// CITATIONS:
-// docs.google.com/
+//CITATIONS: https://docs.google.com/document/d/1fiR3z2VQQ4N3pV5bYU-9OjVXav_qnlOvDyP1QHKe5Z0/edit?usp=sharing 
