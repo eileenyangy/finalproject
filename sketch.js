@@ -255,8 +255,8 @@ function drawTooltip(maxVisible) {
 
   let label = getBoxLabel(i);
   textFont('Menlo');
-  textSize(11);
-  textAlign(CENTER); //left, center
+  textSize(10);
+  textAlign(LEFT, CENTER);
 
   let tw = textWidth(label) + 16; // textWidth() measures pixel width of a string at the current font/size
   let th = 22;
@@ -266,7 +266,7 @@ function drawTooltip(maxVisible) {
   if (tx + tw > GRID_AREA_WIDTH) tx = mouseX - tw - 12; // flip left if it would go off the grid edge
   if (ty < GRID_Y)               ty = mouseY + 10;       // flip down if it would go above the grid
 
-  fill('#0F0F0FE6'); // E6 in hex = 230/255 opacity — slightly transparent
+  fill('#0F0F0F');
   stroke('#373737');
   strokeWeight(1);
   rect(tx, ty, tw, th, 4);
@@ -277,7 +277,7 @@ function drawTooltip(maxVisible) {
 
 
 // --- LEGEND ---
-function drawLegend() {
+function drawLegend() { // legend boxes and labels are hardcoded to always show, we are assigning specific colors and labels to each item in the legend, and then drawing them in a loop 
   let items = [
     {col: color(210, 50, 50), label: 'NOW'},
     {col: color('#D2D2C8'),label: 'LIVED'},
@@ -287,18 +287,19 @@ function drawLegend() {
     { col: color('#50C878'),label: '90D'},
   ];
 
-  let spacing = GRID_AREA_WIDTH / items.length; // divide 600px evenly among 6 items = 100px each
-  let y = 900;
-
+  //legend positioning
+  let spacing = GRID_AREA_WIDTH / items.length; // divide 600px evenly among 6 items = 100px each. we do this bc the legend is designed to always fill the entire grid area, so calculated spacing  based on the # of items
+  let y = 900; //fixed y position for legent
   noStroke();
   textFont('Menlo');
   textSize(9);
   textAlign(CENTER, TOP);
 
+  //loop through items array to draw legend
   for (let i = 0; i < items.length; i++) {
     let cx = spacing * i + spacing / 2; // horizontal center of this legend item's zone
-    fill(items[i].col);
-    rect(cx - 4, y, 8, 8, 1.5);
+    fill(items[i].col); //.col = color we assigned to this item in the array
+    rect(cx - 4, y, 8, 8, 1.5); 
     fill('#555555');
     text(items[i].label, cx, y + 13);
   }
@@ -312,38 +313,37 @@ function drawLegend() {
 // =============================================================================
 
 
-// --- SCENE 1: INPUT ---
-const inputScene = {
+// ======SCENE 1: INPUT===========================
+const inputScene = { 
   digits: '',    // raw digits as the user types (e.g. "01151990")
   btnRects: [],  // bounding rects for 60/80/100 buttons, used for click detection
 
   onEnter() {
-    this.digits = '';
-    document.getElementById('bg-video').style.display = 'block';
-    document.getElementById('bg-overlay').style.display = 'block';
+    this.digits = ''; //to explain this granularly, when the user enters the inputScene, 
+    // we want to reset the digits variable to an empty string so that any previous 
+    // input is cleared and the user can start fresh. This ensures that if they navigate 
+    // back to this scene, they won't see their old input still there, which could be confusing 
+    document.getElementById('bg-video').style.display = 'block'; // show background video
+    document.getElementById('bg-overlay').style.display = 'block'; 
   },
   onExit() {
-    document.getElementById('bg-video').style.display = 'none';
+    document.getElementById('bg-video').style.display = 'none'; //remove background video when leaving
     document.getElementById('bg-overlay').style.display = 'none';
   },
 
   draw() {
     clear(); // transparent canvas so the HTML background video shows through
 
-    let cx = width / 2;
+    let cx = width / 2; // center x for text/buttons
     let cy = height / 2 - 10;
-
     textAlign(CENTER, CENTER);
     textFont('Menlo');
     noStroke();
-
     textSize(13);
     fill('#FFFFFF');
     text('HI FRIEND!', cx, cy - 100);
-
     fill('#878787');
     text('WHEN IS YOUR BIRTHDAY?', cx, cy - 68);
-
     let bw = 270, bh = 50;
     let bx = cx - bw / 2, by = cy - 42;
     fill('#FFFFFF');
@@ -363,27 +363,30 @@ const inputScene = {
     fill('#878787');
     text('HOW LONG DO YOU PLAN TO LIVE?', cx, cy + 42);
 
-    let options = [60, 80, 100];
-    let btnW = 66, btnH = 32, gap = 16;
-    let totalW = options.length * btnW + (options.length - 1) * gap;
+    let options = [60, 80, 100]; // lifespan options in years
+    let btnW = 70, btnH = 32, gap = 16; //
+    let totalW = options.length * btnW + (options.length - 1)*gap;
     let startX = cx - totalW / 2; // center the button row horizontally
     let btnY   = cy + 62;
     this.btnRects = [];
 
-    for (let i = 0; i < options.length; i++) {
+    for (let i = 0; i < options.length; i++) { //loop thru lifespan options to draw buttons and set up click zones - length: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/length 
       let bx2 = startX + i * (btnW + gap);
-      this.btnRects.push({ x: bx2, y: btnY, w: btnW, h: btnH, val: options[i] });
+      this.btnRects.push({x: bx2, y: btnY, w: btnW, h: btnH, val: options[i]}); //this is creating a rectangle object for each btn with x,y,w,h tha define its position and size, and val to store lifespan value. these rects are used ltr in handleclick to check if mouse is within any button when clicked
 
-      if (options[i] === targetYears) {
+      if (options[i] === targetYears) { //highlighting selected lifespan
         fill('#FFFFFF'); stroke('#FFFFFF');
       } else {
         fill('#282427'); stroke('#555555');
       }
       strokeWeight(1);
-      rect(bx2, btnY, btnW, btnH, 6);
+      rect(bx2, btnY, btnW, btnH, 6); //rounded corners = 6
       noStroke();
-      fill(options[i] === targetYears ? '#000000' : '#999999');
-      // ternary: condition ? valueIfTrue : valueIfFalse
+      if (options[i] === targetYears){
+        fill('#000000');
+      } else {
+        fill('#999999');
+      };
       textSize(13);
       text('' + options[i], bx2 + btnW / 2, btnY + btnH / 2);
     }
@@ -409,11 +412,11 @@ const inputScene = {
       this.digits += key; // max 8 digits = mmddyyyy
     }
   },
-
+// CITATION: mouseX, mouseY, mousePressed() — https://p5js.org/reference/p5/mouseX.html 
   handleClick() {
-    for (let b of this.btnRects) {
-      if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) {
-        targetYears = b.val;
+    for (let b of this.btnRects) { //check if click is within lifespan button
+      if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) { //if click is within button bounds, set targetyears to buttons value
+        targetYears = b.val;  //b.val stores the lifespan value (60, 80, or 100) that we assigned when creating the btnRects in draw()
       }
     }
   }
@@ -421,27 +424,25 @@ const inputScene = {
 
 
 // --- SCENE 2: TRANSITION ---
-const transitionScene = {
+const transitionScene = { //timed transition
   onEnter() { this.startTime = millis(); },
 
   draw() {
     let elapsed = millis() - this.startTime;
 
     // fade in: ramps alpha from 0→255 over the first 600ms, then stays at 255
-    let a = elapsed < 600 ? (elapsed / 600) * 255 : 255;
+    let a = elapsed < 600 ? (elapsed /600) * 255 : 255;
 
     noStroke();
     textAlign(CENTER, CENTER);
-
     textFont('Menlo');
     textSize(13);
     fill(255, a);
     text('YOU MADE IT THROUGH', GRID_CX, height / 2 - 34);
-
-    textFont(canelaFont);
+    textFont('Menlo');
     textSize(70);
     fill(255, a);
-    text(yearsLived + ' YEARS', GRID_CX, height / 2 + 22);
+    text(yearsLived + ' YEARS', GRID_CX,height / 2 + 22);
 
     if (elapsed > 2200) goTo(introBoxScene);
   }
@@ -450,11 +451,10 @@ const transitionScene = {
 
 // --- SCENE 3: INTRO BOX ---
 const introBoxScene = {
-  onEnter() { this.startTime = millis(); },
-
+  onEnter() { this.startTime = millis(); }, //when entering IntroBoxScene, we record current time in ms to use as reference point
   draw() {
-    let elapsed = millis() - this.startTime;
-    let a = elapsed < 600 ? (elapsed / 600) * 255 : 255;
+    let elapsed = millis() - this.startTime; //this.startTime is the time when we entered the scene, so subtracting it from the current time gives us how long we've been in this scene. we use this elapsed time to ctrl timing of the fade-in and blinking effects
+    let a = min(255, (elapsed / 600) * 255); 
 
     noStroke();
     textAlign(CENTER, CENTER);
@@ -464,7 +464,7 @@ const introBoxScene = {
     text('THIS BOX REPRESENTS 1 WEEK OF YOUR LIFE...', GRID_CX, height / 2 - 70);
 
     // blink: floor(elapsed/400) increments every 400ms; %2 alternates 0 and 1 → on/off
-    if (elapsed > 2400 || floor(elapsed / 400) % 2 === 0) {
+    if (elapsed > 2400 || floor(elapsed / 400) % 2 === 0) { //
       fill(215);
       rect(GRID_CX - 11, height / 2 - 22, 22, 22, 4);
     }
@@ -591,7 +591,7 @@ const goalScene = {
       pendingRecs = [];
       fetchDone   = false;
       fetchRecommendations(this.text, goalDays);
-      goTo(loadingScene);
+      goTo(gridFullScene);
 
     } else if (keyCode === BACKSPACE) {
       this.text = this.text.slice(0, -1);
@@ -632,38 +632,6 @@ async function fetchRecommendations(goal, days) {
 }
 
 
-// --- SCENE 6: LOADING ---
-const loadingScene = {
-  onEnter() { this.lastTick = millis(); this.dots = 0; },
-
-  draw() {
-    if (millis() - this.lastTick > 400) {
-      this.dots = (this.dots + 1) % 4; // % 4 cycles 0→1→2→3→0, creating the animated dots
-      this.lastTick = millis();
-    }
-
-    noStroke();
-    textAlign(CENTER, CENTER);
-    textFont('Menlo');
-    textSize(13);
-    fill('#878787');
-    text('THINKING' + '.'.repeat(this.dots), GRID_CX, height / 2);
-    // '.'.repeat(n) creates a string of n dots: 0="", 1=".", 2="..", 3="..."
-
-    if (fetchDone) {
-      let completedGoal = {
-        text:   pendingGoal.text,
-        days:   pendingGoal.days,
-        color:  pendingGoal.color,
-        boxIdx: pendingGoal.boxIdx,
-        recs:   pendingRecs
-      };
-      goals.push(completedGoal);
-      pendingGoal = null;
-      goTo(gridFullScene);
-    }
-  }
-};
 
 
 // --- SCENE 7: FULL GRID + SIDEBAR ---
@@ -689,6 +657,12 @@ const gridFullScene = {
     textSize(28);
     fill(255, a);
     text(weeksRemaining.toLocaleString() + ' WEEKS LEFT', GRID_CX, 50);
+
+    // when the API call finishes in the background, add the goal to the list
+    if (fetchDone && pendingGoal !== null) {
+      goals.push({ text: pendingGoal.text, days: pendingGoal.days, color: pendingGoal.color, boxIdx: pendingGoal.boxIdx, recs: pendingRecs });
+      pendingGoal = null;
+    }
 
     drawGrid(floor(this.totalVisible));
     drawTooltip(floor(this.totalVisible));
